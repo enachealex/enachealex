@@ -4,9 +4,9 @@
 **Last updated:** 2026-08-01
 
 Goal: a mobile app where a user picks their vehicle, selects wheels and tires
-(catalog or custom size), and sees the result rendered on their vehicle — with
-correct diameter, sidewall, and offset — in a profile view and (later) a
-rotatable 3D view.
+(catalog or custom size), and sees the result composited onto **a photo of their
+own car** — with correct diameter, sidewall, and offset — viewable from multiple
+captured angles.
 
 ---
 
@@ -15,11 +15,12 @@ rotatable 3D view.
 | # | Decision | Choice |
 |---|---|---|
 | 1 | Platform / stack | React Native + Expo, iOS + Android (+ web, inherited) |
-| 2 | Visualization for v1 | 2D profile only; 3D as a fast-follow |
+| 2 | Visualization for v1 | 2D compositing onto **user-submitted photos**. No licensed vehicle imagery, no 3D models. |
 | 3 | Fitment data budget | TBD — options priced in §6 |
 | 4 | Vehicle coverage for v1 | Only vehicles already in Maintenance Tracker |
 | 5 | v1 scope | Visualizer + accounts + affiliate buy links |
 | 6 | Wheels vs. tires | Wheel *models* + tire *sizes*. Tire brand/sidewall detail deferred. |
+| 7 | "Rotate" view | **Multi-angle photo capture** + swipe, not a 3D model (§4b) |
 
 ---
 
@@ -98,12 +99,17 @@ Profile view is the degenerate no-warp case of the same compositor and can be
 added later — but it costs a second base image per vehicle, which is the
 expensive part.
 
-**4. 3D vehicle models don't scale.**
-There are 40,000+ year/make/model/trim combos and nobody licenses 40,000 accurate
-models. Every competitor ships high-quality models for the top ~100–300 vehicles
-and falls back to body-style archetypes. Decision 4 (only vehicles already in the
-tracker) actually *defuses* this — the initial model set is however many cars the
-user base already tracks. Deferred to Phase 6 regardless.
+**4. Vehicle imagery doesn't scale — *solved by decision 2*.**
+Originally this plan needed either licensed vehicle photography (per angle, per
+vehicle) or 3D models (nobody licenses 40,000 accurate ones). **User-submitted
+photos remove the problem entirely:** no per-vehicle asset pipeline, no top-300
+tier, no body-style fallbacks, and vehicle coverage becomes infinite on day one.
+Remaining licensing exposure is the wheel catalog alone, which was required
+regardless.
+
+The approach is also a better product, not merely a cheaper one — it's the user's
+actual car, in their color, at their ride height, with their existing mods. That
+matters for share rate, which is the growth loop (§5, Phase 5).
 
 ---
 
@@ -140,9 +146,10 @@ identically on iOS, Android, and web with zero new dependencies. Escalate to
 React Native Skia only if masking and sidewall generation demand it (Skia's web
 build is a heavy CanvasKit/WASM payload — not free for the PWA).
 
-### 4a. Camera angle — why 25–30°
+### 4a. Camera angle
 
-The v1 view is a front corner shot, not a profile. Two forces set the angle:
+The target capture is a **front corner shot, 25–30° off profile**. Two forces set
+that range:
 
 - **Rotating further breaks the 2D illusion.** At an angle a wheel projects as an
   ellipse, and the flat face-on catalog photo must be perspective-warped onto it.
@@ -154,17 +161,61 @@ The v1 view is a front corner shot, not a profile. Two forces set the angle:
   which the eye judges well as a relative-edge comparison — but shallower always
   shows less.
 
-**25–30° is the compromise:** poke/tuck reads clearly, and the face stays
-foreshortened enough that a warped catalog image holds up.
+Since photos are user-supplied, this is **capture guidance, not an asset spec** —
+a ghost overlay in the camera showing where to stand. The compositor handles
+whatever angle it actually receives, measured per §4b, and warns when a photo is
+too close to profile for offset to be legible.
 
-**This stays dependency-free.** React Native supports
+**The warp stays dependency-free.** React Native supports
 `transform: [{ perspective }, { rotateY }]` natively, and it maps to CSS
-transforms under `react-native-web` — so the corner warp runs on iOS, Android,
-and the PWA with nothing new added. Skia is likely avoidable.
+transforms under `react-native-web` — so it runs on iOS, Android, and the PWA
+with nothing new added. Skia is likely avoidable.
 
 **What does get harder:** the tire becomes an elliptical annulus with a visible
 **tread band** on the leading edge, rather than a flat ring. New procedural work,
 but also a visual upgrade — visible tread is what sells the render.
+
+### 4b. Photo capture & calibration — no ML required for v1
+
+The user drags an ellipse over their wheel. **That single gesture yields every
+parameter the compositor needs**, deterministically:
+
+| Needed | Derived from |
+|---|---|
+| Camera angle θ | `cos θ = minor axis ÷ major axis` — the ellipse's squash *is* the angle |
+| Scale (px per inch) | `major axis px ÷ OE wheel diameter`, OE diameter known from fitment data |
+| Anchor point | ellipse center |
+
+No model to train, no training data, no inference cost, and it works at any angle
+on any photo. **Auto-detection is a later convenience** that pre-positions the
+ellipse — a nice-to-have, never a prerequisite. This keeps an entire ML
+workstream off the critical path.
+
+**Multi-angle capture replaces 3D rotation (decision 7).** The user shoots 3–4
+photos walking around the car; each is calibrated independently; the UI swipes
+between them. This delivers the *intent* of the original rotatable-3D
+requirement — see the wheels from several angles — with zero models and zero
+licensing. Not continuous rotation, but every frame is their actual car, which is
+the better trade.
+
+**Photos live in the garage.** Calibrate once when the vehicle is added, reuse
+forever. The user does not need to be standing next to their car to shop, and it
+mirrors the Maintenance Tracker garage model.
+
+**Two hard parts, both to be validated in Phase 0:**
+
+1. **Removing the old wheel.** Pasting over is not enough — a smaller new setup
+   leaves the original peeking out. What rescues this is that **plus sizing keeps
+   overall diameter roughly constant** by design (bigger wheel, shorter sidewall,
+   same OD), so most swaps cover nearly the same pixels and plain occlusion
+   works. The failure case is a genuine OD change, needing fill — forgiving
+   against a mostly-dark tire, but it must be tested, not assumed.
+
+2. **Lighting and color match.** The catalog wheel is studio-lit on white; the
+   photo is a driveway at golden hour. Without correction the result reads as a
+   sticker. Mitigation: sample ambient color and exposure from the photo, apply a
+   tint, synthesize a contact shadow. **This is the single largest quality risk
+   in the plan** — it decides whether output looks real.
 
 ---
 
@@ -176,10 +227,15 @@ Estimates assume 1–2 developers.
 Not optional. Everything downstream is priced by what this finds.
 - Trial the fitment API; validate coverage against 20 real vehicles.
 - Get written pricing *and image licensing terms* from 2–3 catalog sources.
-- **Spike:** one hardcoded car + one hardcoded wheel composited at a 25–30°
-  corner angle (§4a), on a real device and on web. **Test a deep-dish and a
-  concave-spoke wheel specifically** — those fail first, and they decide whether
-  the warped-flat-photo approach holds or the angle has to come down.
+- **Spike:** composite a catalog wheel onto a **real phone photo of a real car**,
+  calibrated by the ellipse gesture (§4b), on device and on web. Three things
+  this must answer, in priority order:
+  1. **Does the lighting match hold up?** Shoot the same car in harsh noon sun,
+     overcast, and golden hour. This is the largest quality risk in the plan.
+  2. **Does old-wheel removal work under a real OD change?** Not just the
+     constant-OD plus-size case that occlusion handles for free.
+  3. **Do deep-dish and concave-spoke wheels survive the warp?** They fail first,
+     and they decide whether 30° holds or the guidance angle comes down.
 - Prototype the canonical vehicle resolver against real Maintenance Tracker
   records; measure the ambiguous-match rate. That number sizes Phase 2.
 
@@ -237,23 +293,33 @@ Pure TypeScript, zero UI. ~90% tests by line count.
 
 **Exit:** catalog browsable and filterable against a real vehicle.
 
-### Phase 5 — 2D corner visualizer (3–4 weeks) — *the v1 payoff*
-- Vehicle base assets: **one front corner shot per vehicle at 25–30° off
-  profile** (§4a), each with authored metadata — wheel-well anchor points (x, y),
-  the camera angle it was shot at, pixels-per-inch scale, and a fender mask layer
-  for correct occlusion. Consistent angle across the fleet matters more than the
-  exact value; the compositor reads the angle per asset.
-- Compositor: scale wheel image to true diameter → perspective-warp the face onto
-  the projected ellipse via `perspective` + `rotateY` → generate the tire as an
-  elliptical annulus with a leading-edge tread band from Phase 3 math → translate
-  laterally by offset → draw behind fender mask.
-- **Offset renders as a real lateral translation**, not an annotation — this is
-  the whole reason for the corner angle.
+### Phase 5 — Photo capture, calibration & compositor (4–5 weeks) — *the v1 payoff*
+
+**5a. Capture & calibration (§4b)**
+- Camera flow with a ghost overlay guiding a 25–30° corner shot; support picking
+  from the library too.
+- Ellipse-fit gesture per wheel → derives angle, scale, and anchor.
+- Multi-angle capture: 3–4 shots per vehicle, each calibrated, swipeable.
+- Photos and calibration stored on the vehicle record; captured once, reused.
+- Quality guardrails: reject too-dark/too-blurry, warn when the angle is too near
+  profile for offset to read.
+- **Strip EXIF on ingest** (GPS especially), and offer license-plate blur.
+
+**5b. Compositor**
+- Mask out the original wheel; fill where the new OD is smaller (§4b, hard part 1).
+- Scale the catalog wheel to true diameter → perspective-warp onto the measured
+  ellipse via `perspective` + `rotateY` → generate the tire as an elliptical
+  annulus with a leading-edge tread band from Phase 3 math → translate laterally
+  by offset.
+- **Offset renders as a real lateral translation**, not an annotation.
+- Ambient color/exposure match + synthesized contact shadow (§4b, hard part 2).
 - Controls: ride height, finish swap, staggered front/rear setups.
 - Numeric poke/tuck readout alongside the render.
-- **Export/share as an image.** This is the organic growth loop — do not defer it.
-- *Not in v1:* profile view. It's the no-warp case of this same compositor, so
-  the code is nearly free — but it needs a second base image per vehicle.
+- **Export/share as an image.** The growth loop, and far stronger now that the
+  shared image is the user's own car — do not defer it.
+
+*Deferred:* automatic wheel detection (pre-positions the ellipse; pure
+convenience), and any licensed or generic stock vehicle imagery.
 
 **Exit:** a user's real tracked vehicle, with a real catalog wheel, shareable.
 
@@ -272,14 +338,21 @@ Accessibility, offline behavior, analytics on the fitment funnel, crash
 reporting, store assets and review, and legal — fitment guidance is advisory,
 **not a safety guarantee**, and must say so.
 
-### Fast-follow — 3D viewer (4–6 weeks)
-Deferred per decision 2. `three.js` via `react-three-fiber` + `expo-gl`.
-Model pipeline: source GLB → decimate → bake → Draco/KTX2 → under ~5MB.
-Rig wheel mount transforms so offset is a real translation along the axle.
-Parametric tire mesh from the Phase 3 math — never one model per size.
-Hard budget: 60fps on a mid-range Android or the feature isn't real.
+### Fast-follows (post-v1, in likely priority order)
+1. **Automatic wheel detection** — pre-positions the calibration ellipse. Pure
+   convenience; the manual gesture already works.
+2. **Stylized body-style illustrations** — the no-photo fallback, pending O6.
+3. **Tire brand/sidewall detail** — per decision 6.
+4. **3D viewer** — *no longer on the roadmap by default.* Multi-angle photo
+   capture (decision 7) covers the original rotate requirement, and 3D would show
+   a generic model rather than the user's own car, which is a product step
+   backward. Revisit only if continuous rotation proves necessary; it would mean
+   `three.js` via `react-three-fiber` + `expo-gl`, per-vehicle model licensing,
+   and a GLB pipeline under ~5MB at 60fps on mid-range Android.
 
-**Rough v1 total: 3.5–5 months** (2D-only scope).
+**Rough v1 total: 3.5–5 months.** Phase 5 grew ~1 week (capture and calibration
+are new), offset by deleting the entire vehicle-imagery acquisition workstream —
+so net schedule is roughly flat and the cost line drops substantially.
 
 ---
 
@@ -308,8 +381,11 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 | Wheel image rights unclear | Blocks launch; store rejection | Written licensing in Phase 0, before any renderer work |
 | Vehicle name matching is noisy | Wrong fitment shown → safety issue | Confidence scoring + disambiguation UI + VIN path |
 | Image normalization underestimated | Renderer output looks broken | Treat as its own workstream in Phase 4, with manual QA |
-| Vehicle base imagery is licensed and per-angle | Cost scales with views × vehicles | One angle only in v1 (§4a); revisit 3D if more angles are wanted |
-| Warped catalog photo looks pasted on | Core feature feels cheap | Hold the angle ≤30°; test deep-dish and concave spokes in Phase 0 |
+| **Lighting mismatch makes composites look fake** | Core feature feels cheap | Largest quality risk. Ambient sampling + contact shadow; validated first in Phase 0 |
+| Old wheel not fully removed on OD change | Visible artifact | Plus sizing keeps OD ~constant, so most swaps occlude cleanly; fill path tested in Phase 0 |
+| Warped catalog photo looks pasted on | Core feature feels cheap | Guide capture to ≤30°; test deep-dish and concave spokes in Phase 0 |
+| Poor user photos (dark, blurry, bad angle) | Bad output blamed on the app | Capture guardrails + ghost overlay + explicit angle warning (Phase 5a) |
+| User photos on the server | Privacy, moderation, plate exposure | Strip EXIF on ingest, offer plate blur, moderate anything shared publicly |
 | Fitment advice taken as authoritative | Liability | Prominent advisory disclaimer; never present as a guarantee |
 | Backend is greenfield | Phase 6 slips | Start the Worker + D1 skeleton during Phase 4 |
 
@@ -324,7 +400,10 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 - **O3 — Existing wheel brand relationships,** or starting cold on catalog data?
 - **O4 — Does the Maintenance Tracker garage move to the cloud** as part of Phase 6
   accounts, or stay local-only with the visualizer owning the only backend?
-- **O5 — Where do vehicle base images come from?** Licensed manufacturer press
-  photos, commissioned shoots, or rendered from 3D models. Now the largest
-  per-vehicle cost line (§4a), and the answer that most affects whether 3D moves
-  earlier than the fast-follow slot.
+- ~~**O5 — Where do vehicle base images come from?**~~ **Resolved:** user-submitted
+  photos (decision 2). No licensed vehicle imagery in v1.
+- **O6 — Is there a no-photo fallback?** A user shopping at work, or before buying
+  the car, has nothing to composite onto. Options: require a photo, ship a small
+  set of commissioned *stylized illustrations* per body style (far cheaper to
+  license than photography, and stylized art sidesteps the realism problem), or
+  accept the gap in v1.
