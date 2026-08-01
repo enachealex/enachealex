@@ -18,11 +18,11 @@ captured angles.
 | 2 | Visualization for v1 | 2D compositing onto **user-submitted photos**. No licensed vehicle imagery, no 3D models. |
 | 3 | Fitment data budget | TBD — options priced in §6 |
 | 4 | Vehicle coverage for v1 | Only vehicles already in Maintenance Tracker |
-| 5 | v1 scope | Visualizer + accounts + affiliate buy links |
+| 5 | v1 scope | Visualizer + affiliate buy links. **No accounts, no sign-in, no user data on any server.** |
 | 6 | Wheels vs. tires | Wheel *models* + tire *sizes*. Tire brand/sidewall detail deferred. |
 | 7 | "Rotate" view | **Multi-angle photo capture** + swipe, not a 3D model (§4b) |
 | 8 | App structure | **One app, tabbed shell.** Wheels is a peer tab to Maintenance over a shared garage, reached from a new Home hub (§4c). |
-| 9 | Photo storage | **Photos never leave the device.** Sync build + calibration data only; share uploads one composite on explicit user action (§4d). |
+| 9 | User data | **Fully local.** Photos, builds, calibration, and garage all live in device storage. Nothing about the user is uploaded, ever (§4d). |
 
 ---
 
@@ -66,13 +66,22 @@ non-alphanumerics. Fitment lookup needs a *canonical* vehicle identity, so
 manual-disambiguation UI when the match is ambiguous. This is real Phase 1 work,
 not a free import.
 
-**(b) Decision 5 requires building a backend from scratch.**
+**(b) There is no backend, and decision 9 keeps it that way.**
 Maintenance Tracker has **no auth, no user accounts, and no server-side data
 store**. Its only server is a Cloudflare Worker for web push
-(`push-worker/`, `maintenance-push.enachealex1.workers.dev`). Accounts, saved
-builds, and affiliate attribution all need a backend that does not exist yet.
-Recommendation: stay on Cloudflare (Workers + D1 + R2) since that's already the
-deployment target and the account is set up.
+(`push-worker/`, `maintenance-push.enachealex1.workers.dev`). Rather than build
+one, the visualizer inherits the local-only model: builds, photos, and
+calibration all live in device storage (§4d).
+
+The one addition is a **stateless fitment proxy** — a Worker that holds vendor
+API keys and caches responses, storing nothing about the user. Same Cloudflare
+account, same deployment story as the existing push worker.
+
+**Its local-only nature also constrains device migration.** `backup.ts` exports
+one JSON blob, and `BACKUP_IMPORT_SUPPORTED` is **web-only** — native has no file
+picker, so a phone user currently cannot restore a backup at all. With no cloud
+sync in the plan, that gap becomes the *entire* migration story and has to be
+closed (Phase 6).
 
 **(c) The app runs on web, so renderer choice matters.**
 Anything picked for the 2D compositor should degrade gracefully to
@@ -133,9 +142,11 @@ src/
     wheels/       capture, calibrate, catalog, compositor, builds
   components/     shared ui + theme                             (existing)
 services/
-  api/            Cloudflare Worker: auth, builds, catalog, affiliate
+  fitment-proxy/  Cloudflare Worker: stateless key-holder + cache (§4d). No user data.
   push-worker/    existing
 ```
+
+No auth service, no database, no object storage — decision 9.
 
 **Two design calls worth flagging:**
 
@@ -185,34 +196,63 @@ phase's primary test target.
 migrating existing screens into file-based routes is a larger restructure than
 React Navigation, which it's built on top of anyway.
 
-### 4d. Local-first photo storage
+### 4d. Fully local, no accounts
 
 Maintenance Tracker is local-only today — AsyncStorage, with the push worker as
-its only server. The visualizer inherits that, and decision 9 makes it explicit:
+its only server. The visualizer inherits that unchanged. Decision 9 makes it
+explicit and permanent:
 
-| Data | Where it lives | Size |
-|---|---|---|
-| Base photos + capture source | **Device only, never uploaded** | MBs |
-| Build + calibration (wheel, sizes, offset, angle, scale, anchor) | Synced with the account | ~hundreds of bytes per vehicle |
-| Shared composite | Uploaded **only** on explicit share tap | one image, per user action |
+| Data | Where it lives |
+|---|---|
+| Photos, calibration, builds, garage, history | **Device storage only** |
+| Sharing | OS share sheet — the composite goes straight to Messages/Instagram/wherever |
+| Fitment + catalog lookups | Stateless proxy (below), which stores nothing about the user |
 
-Two features in this plan would otherwise break local-only: accounts with synced
-builds (decision 5, Phase 6) and server-rendered share previews (Phase 6). This
-split keeps both. Sync carries calibration *numbers*, not pixels — enough to
-reproduce a build on another device that has its own photo of the same car.
+**No sign-in, no sync, no user records anywhere.** This deletes auth, D1, object
+storage, share-link hosting, moderation, and the entire GDPR/CCPA surface. It
+also removes a signup wall from in front of the product's core value.
 
-**What this buys beyond the obvious:** the EXIF/GPS-stripping and license-plate
-concerns collapse, since those were server-side risks. Object storage cost drops
-to near zero. And the share upload becomes a clean per-image consent boundary
-rather than ambient background sync.
+**Sharing without a backend.** The composite renders on-device and goes to the
+native share sheet as an image. This is arguably a *better* growth loop than
+share links — the image lands directly in the feed or thread where people
+actually react to it. What's lost is the click-back funnel and per-share
+analytics; a small in-image watermark recovers attribution if wanted.
 
-**What it costs — decide deliberately, don't discover it later.** `backup.ts` is
-a pretty-printed JSON blob shared via the OS share sheet or downloaded on web.
-Base64-encoding photos into it takes it from kilobytes to tens of megabytes. So
-either photos are excluded from backup — a user switching phones re-shoots and
-re-calibrates — or backup grows a real container format. Since calibration is one
-gesture per vehicle, **re-shoot on device change is the recommended v1 answer**.
-This is O9.
+**Affiliate links still work.** They're outbound URLs carrying your affiliate ID;
+attribution happens on the retailer's side. You lose per-user analytics, not
+revenue.
+
+**Privacy becomes a feature, not a disclaimer.** "Your car, your photos, never
+leaves your phone" is a real differentiator in this category, and it extends copy
+`Home.tsx` already ships: *"Your data lives only on this device."*
+
+#### No accounts still means one small server
+
+The fitment API and wheel catalog are metered third-party services. **Embedding
+their API key in the app means it gets extracted and your quota gets burned** —
+a financial risk, not a theoretical one. A thin **stateless Cloudflare Worker**
+solves it:
+
+- holds the vendor API keys
+- caches aggressively — fitment data is effectively static, and this is the
+  difference between one API call per vehicle and one per user per session
+- lets you swap vendors without shipping an app release
+
+It stores **nothing about the user** — no accounts, no photos, no builds, no
+identifiers. Same infrastructure as the existing `push-worker`.
+
+#### The cost — decide deliberately
+
+`backup.ts` is a pretty-printed JSON blob shared via the OS share sheet or
+downloaded on web. It covers builds and calibration fine, since those are small.
+Base64-encoding **photos** into it takes it from kilobytes to tens of megabytes,
+so photos are excluded — a user switching phones re-shoots and re-calibrates.
+Recalibration is one gesture per vehicle, so this is the recommended v1 answer
+rather than a container format. This is O9.
+
+With no cloud sync, **backup/restore is now the *only* device-migration path** —
+so it matters more than it did, and Phase 6 should treat it as a real feature
+rather than the afterthought it can be when sync exists.
 
 **2D renderer:** start with layered `<Image>` + transforms, which works
 identically on iOS, Android, and web with zero new dependencies. Escalate to
@@ -423,17 +463,20 @@ convenience), and any licensed or generic stock vehicle imagery.
 
 **Exit:** a user's real tracked vehicle, with a real catalog wheel, shareable.
 
-### Phase 6 — Accounts, builds & commerce (2–3 weeks)
-- Cloudflare Worker API + D1: auth, saved builds, sync.
-- **Sync carries build + calibration data only — never photos** (decision 9,
-  §4d). A build restored on a second device re-composites against that device's
-  own photo of the car.
-- Save/name/revisit builds; side-by-side comparison of two builds.
-- Share links. **The composite is rendered on-device and uploaded on the share
-  tap** — the server cannot render a preview, because it has no photo. EXIF strip
-  and optional plate blur happen here, on the way out.
-- **Affiliate buy links** (Tire Rack, Discount Tire, Fitment Industries) with
-  click attribution. The visualizer is the funnel; the click-out is the revenue.
+### Phase 6 — Builds, sharing & commerce (1–2 weeks)
+
+Roughly halved by decision 9 — no auth, no D1, no object storage, no share-link
+hosting, no moderation.
+
+- Save/name/revisit builds **in local storage**, alongside the existing garage.
+- Side-by-side comparison of two builds.
+- **Share via the OS share sheet** — composite rendered on-device, handed to the
+  system as an image. EXIF strip and optional plate blur on the way out.
+- **Affiliate buy links** (Tire Rack, Discount Tire, Fitment Industries).
+  Outbound URLs with your affiliate ID; attribution is retailer-side.
+- **Extend `backup.ts` to cover builds and calibration.** With no cloud sync this
+  is the only device-migration path, so it is a real feature now — including
+  making import work on native, which today is web-only for lack of a file picker.
 - **Write-back to the Maintenance tab:** a purchased wheel/tire set becomes a
   tracked item with mileage — the payoff of the shared garage (decision 8).
 
@@ -454,11 +497,12 @@ reporting, store assets and review, and legal — fitment guidance is advisory,
    `three.js` via `react-three-fiber` + `expo-gl`, per-vehicle model licensing,
    and a GLB pipeline under ~5MB at 60fps on mid-range Android.
 
-**Rough v1 total: 3.5–5 months.** Phase 5 grew ~1 week (capture and calibration
-are new), offset by deleting the entire vehicle-imagery acquisition workstream —
-so net schedule is roughly flat and the cost line drops substantially. Decision 8
-(one app, not two) removes a second auth story, a second store listing, and a
-duplicate garage.
+**Rough v1 total: 3–4.5 months.** Phase 5 grew ~1 week for capture and
+calibration, offset by deleting the vehicle-imagery acquisition workstream
+entirely. Decision 8 (one app) removes a second store listing and a duplicate
+garage. Decision 9 (no accounts) roughly halves Phase 6 — no auth, no database,
+no object storage, no share-link hosting, no moderation, and no privacy-compliance
+surface.
 
 **Critical path note:** Phase 1 is the only phase with no external dependency —
 no licensing, no feed, no catalog. It can run in parallel with Phase 0 and is the
@@ -495,12 +539,13 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 | Old wheel not fully removed on OD change | Visible artifact | Plus sizing keeps OD ~constant, so most swaps occlude cleanly; fill path tested in Phase 0 |
 | Warped catalog photo looks pasted on | Core feature feels cheap | Guide capture to ≤30°; test deep-dish and concave spokes in Phase 0 |
 | Poor user photos (dark, blurry, bad angle) | Bad output blamed on the app | Capture guardrails + ghost overlay + explicit angle warning (Phase 5a) |
-| Shared composites on the server | Privacy, moderation, plate exposure | Only shared images ever upload (decision 9). Strip EXIF, offer plate blur, moderate the public surface |
-| Users supply copyrighted images they found online | Largely neutralized by local-first storage (§7a) | No in-app image search; neutral copy. No service hosting, so no hosting exposure |
+| Users supply copyrighted images they found online | Neutralized by decision 9 (§7a) | Nothing is uploaded, so there is no hosting exposure. One constraint only: no in-app image search |
+| **Native has no backup import today** | With no sync, native users have **no** device-migration path at all | `BACKUP_IMPORT_SUPPORTED` is web-only for lack of a file picker. Add `expo-document-picker` in Phase 6 |
 | Photos excluded from backup | Device migration loses calibration | Accepted for v1 — recalibration is one gesture per vehicle (§4d, O9) |
+| Vendor API key extracted from the app binary | Quota burned, real financial cost | Stateless proxy holds the key; app never sees it (§4d) |
 | Photo shows non-factory wheels | **Silent** miscalibration of every render | Ask "are these factory wheels?" at calibration; take current diameter (§4b) |
 | Fitment advice taken as authoritative | Liability | Prominent advisory disclaimer; never present as a guarantee |
-| Backend is greenfield | Phase 6 slips | Start the Worker + D1 skeleton during Phase 4 |
+| Fitment proxy needed before catalog work | Phase 4 blocked | Stateless Worker, small — stand it up during Phase 3 |
 
 ---
 
@@ -510,19 +555,16 @@ Users will supply images they found online, of their own model or of a car
 they're considering. The library picker cannot distinguish those from photos they
 shot, so this is not a feature to build or block.
 
-**It is also not a service-liability question, because photos stay on the
-device.** Compositing and storage are local (decision 9), so the service never
-copies, hosts, or distributes the image — there is no hosting, therefore no
-hosting exposure. This is how any photo editor operates. The concern applies only
-where content *leaves* the device.
+**It is also not a service-liability question.** Compositing and storage are
+local and nothing is ever uploaded (decision 9), so the service never copies,
+hosts, or distributes the image. No hosting, no hosting exposure. This is how any
+photo editor operates.
 
-**What that leaves:**
+**What that leaves — one UI constraint:**
 - **Never build in-app image search.** A "find photos of your car" browser is
   active encouragement rather than neutral tooling, and is the version that draws
-  both a takedown and a store rejection. One UI constraint, nothing more.
+  both a takedown and a store rejection.
 - **Keep library upload with neutral copy.** No further gating needed.
-- **The share boundary is the only real decision** — see decision 9 and O7. Share
-  uploads one composite, on explicit user action.
 
 Note the technical consequence, which is unrelated to any of the above: sourced
 photos frequently show aftermarket wheels, which breaks scale calibration unless
@@ -540,10 +582,8 @@ photos frequently show aftermarket wheels, which breaks scale calibration unless
 - **O2 — Keep web/PWA support for the visualizer,** or native-only for that screen?
   Affects the 2D renderer choice (§4).
 - **O3 — Existing wheel brand relationships,** or starting cold on catalog data?
-- **O4 — Does the garage move to the cloud** as part of Phase 6 accounts, or stay
-  local-only? Decision 9 already answers the photo half — photos never sync. What
-  remains is whether vehicle records and maintenance history sync, which is now a
-  Maintenance-tab question more than a visualizer one.
+- ~~**O4 — Does the garage move to the cloud?**~~ **Resolved:** no. Everything
+  local, no accounts (decision 9).
 - ~~**O5 — Where do vehicle base images come from?**~~ **Resolved:** user-submitted
   photos (decision 2). No licensed vehicle imagery in v1.
 - **O6 — Is there a no-photo fallback?** A user shopping at work, or before buying
@@ -552,10 +592,13 @@ photos frequently show aftermarket wheels, which breaks scale calibration unless
   fallback for the genuine no-photo case remains commissioned *stylized
   illustrations* per body style: one-time cost, no ongoing exposure, and being
   stylized they sidestep the photo-realism problem rather than competing with it.
-- **O7 — Is the share surface public or private?** Decision 9 narrows this a lot:
-  the only thing uploaded is a composite the user explicitly shared. If share
-  links are unlisted URLs, that's effectively it. If there's ever a public gallery
-  or feed, that surface needs moderation and notice-and-takedown. Needed before
-  Phase 6.
+- ~~**O7 — Is the share surface public or private?**~~ **Resolved:** there is no
+  share surface. Sharing goes through the OS share sheet; nothing is hosted, so
+  there is nothing to moderate (decision 9).
 - **O9 — Photos in backup?** Recommended v1 answer is no: exclude them, accept
   re-shoot on device change (§4d). Revisit if users push back.
+- **O10 — Is losing cross-device continuity acceptable?** Decision 9's one real
+  cost. A user replacing their phone re-shoots and re-calibrates, and there is no
+  "log in and it's all there." Local-only privacy is a genuine differentiator, so
+  this is likely the right trade — but it should be a chosen trade, and it makes
+  fixing native backup import (Phase 6) non-optional.
