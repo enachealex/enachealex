@@ -21,6 +21,7 @@ captured angles.
 | 5 | v1 scope | Visualizer + accounts + affiliate buy links |
 | 6 | Wheels vs. tires | Wheel *models* + tire *sizes*. Tire brand/sidewall detail deferred. |
 | 7 | "Rotate" view | **Multi-angle photo capture** + swipe, not a 3D model (§4b) |
+| 8 | App structure | **One app, tabbed shell.** Wheels is a peer tab to Maintenance over a shared garage, reached from a new Home hub (§4c). |
 
 ---
 
@@ -115,31 +116,73 @@ matters for share rate, which is the growth loop (§5, Phase 5).
 
 ## 4. Architecture
 
+**One app, two feature tabs** (O1 resolved). Not a second Expo app, not a second
+store listing — the visualizer ships inside the existing app as a peer tab to
+maintenance, over a shared garage.
+
 ```
-apps/
-  maintenance-tracker/     existing Expo app
-  tire-visualizer/         new Expo app
-packages/
-  vehicle-core/            Vehicle types, vPIC/EPA clients, canonical resolver
-  fitment-engine/          pure TS: size math, offset math, clearance warnings
-  ui-kit/                  shared theme + primitives (from src/theme.ts)
+src/
+  shell/          tab navigator, Home hub, settings
+  core/
+    vehicle/      types, vPIC/EPA clients, canonical resolver   (existing api/vehicles.ts)
+    fitment/      pure TS: size math, offset math, clearance warnings
+    garage/       VehicleRecord store, shared by both features  (existing storage.ts)
+  features/
+    maintenance/  existing screens: Dashboard, VehicleSetup, MileageSetup
+    wheels/       capture, calibrate, catalog, compositor, builds
+  components/     shared ui + theme                             (existing)
 services/
-  api/                     Cloudflare Worker: auth, garage, catalog, affiliate
-  push-worker/             existing
+  api/            Cloudflare Worker: auth, builds, catalog, affiliate
+  push-worker/    existing
 ```
 
 **Two design calls worth flagging:**
 
-- **`fitment-engine` is a pure TypeScript package** — no network, no rendering,
-  no React. Every correctness-critical behavior in the product lives here and is
-  testable without a device or an API key. This is the single most important
-  structural decision in the plan.
+- **`core/fitment` is pure TypeScript** — no network, no rendering, no React.
+  Every correctness-critical behavior in the product lives here and is testable
+  without a device or an API key. This is the single most important structural
+  decision in the plan.
 
-- **Separate app vs. a tab inside Maintenance Tracker.** Given decision 4, a tab
-  inside the existing app is the tighter product and roughly half the work — no
-  second auth story, no second store listing, vehicles already present. The
-  monorepo above supports either; the shared packages are what matter.
-  **Open question O1 in §8.**
+- **The garage is the spine, not a maintenance feature.** `VehicleRecord` moves
+  to `core/garage` because both tabs read it. This is why one app beats two: the
+  vehicle, its photos, and its calibration are added once and used everywhere.
+
+### 4c. App shell & Home page
+
+Today `Home.tsx` *is* the garage — "🚗 My Garage", a vehicle list routing into
+the maintenance Dashboard, carrying app chrome (notification prompt, backup
+export/import). It gets promoted to a genuine hub.
+
+**Bottom tabs: Home · Maintenance · Wheels**
+
+- **Home** — cross-feature hub. Vehicle cards showing *both* a maintenance-due
+  badge and a saved-builds count, so each vehicle is one entry point to either
+  feature. Add-vehicle CTA. App chrome moves here or to Settings.
+- **Maintenance** — vehicle picker → existing Dashboard flow, unchanged.
+- **Wheels** — vehicle picker → capture → calibrate → catalog → preview → save.
+
+Extract a shared `VehicleList` / `VehiclePicker` from today's `Home.tsx`; all
+three tabs use it. Behavior of the maintenance flow must not change.
+
+**Navigation: migrate to React Navigation** (bottom-tabs + native-stack) with
+linking config. Today's hand-rolled `Nav` union in `App.tsx` is fine for four
+screens, but the shell adds a tab bar over two stacks totaling 10+ screens.
+
+The deciding factor is not screen count, though — it's that **Phase 6 requires
+share links for saved builds**, and deep linking effectively requires a real
+linking setup. React Navigation gives that plus proper URLs on web, which the
+PWA wants anyway.
+
+**The migration risk is specific and must be respected:** `App.tsx` contains
+hand-built PWA history handling (`ensureHistoryEntry`, a `popstate` listener,
+`parentOf`) so the phone back gesture navigates in-app instead of closing the
+PWA. React Navigation's linking layer replaces that. Regressing it is the most
+likely way this phase breaks something users already rely on — treat it as the
+phase's primary test target.
+
+*Considered and rejected:* `expo-router`. Better file-based ergonomics, but
+migrating existing screens into file-based routes is a larger restructure than
+React Navigation, which it's built on top of anyway.
 
 **2D renderer:** start with layered `<Image>` + transforms, which works
 identically on iOS, Android, and web with zero new dependencies. Escalate to
@@ -249,15 +292,30 @@ Not optional. Everything downstream is priced by what this finds.
 
 **Exit:** known monthly data cost, and a wheel visibly on a car on a phone.
 
-### Phase 1 — Monorepo & shared core (1–2 weeks)
-- Stand up the workspace; move Maintenance Tracker in without breaking it.
-- Extract `vehicle-core` (types, vPIC/EPA clients) and `ui-kit` (theme).
-- Extract `fitment-engine` skeleton.
-- CI: typecheck + Jest across all packages. Note `testMatch` currently excludes
-  `.tsx` — widen it if component tests are wanted.
+### Phase 1 — App shell & Home page (2 weeks)
 
-**Exit:** Maintenance Tracker builds and passes tests from inside the monorepo,
-with zero behavior change.
+**The one phase not blocked by Phase 0** — it needs no licensing, no fitment
+feed, no catalog. It can start immediately and run in parallel.
+
+- Restructure `src/` into `shell/`, `core/`, `features/` (§4). Pure moves, no
+  behavior change; land this as its own commit so the diff stays reviewable.
+- Move `VehicleRecord` and `storage.ts` to `core/garage` — both tabs read it.
+- Migrate `App.tsx`'s hand-rolled `Nav` to React Navigation (bottom-tabs +
+  native-stack) with linking config.
+- Build the **Home hub**: vehicle cards showing maintenance-due badge *and*
+  saved-builds count; add-vehicle CTA; app chrome relocated.
+- Extract shared `VehicleList` / `VehiclePicker` from today's `Home.tsx`.
+- Stub the **Wheels** tab so the shell is complete and navigable end to end.
+- CI: typecheck + Jest. Note `testMatch` is `**/__tests__/**/*.test.ts` and so
+  excludes `.tsx` — widen it if component tests are wanted.
+
+**Primary test target — do not skip.** `App.tsx` currently hand-rolls PWA
+history (`ensureHistoryEntry`, `popstate`, `parentOf`) so the phone back gesture
+navigates in-app rather than closing the PWA. React Navigation's linking layer
+replaces it. Verify on a real installed PWA, not just a desktop browser.
+
+**Exit:** all existing maintenance flows behave identically, PWA back gesture
+still works, and an empty Wheels tab is reachable from Home.
 
 ### Phase 2 — Vehicle identity & selection (2 weeks)
 - **Canonical resolver:** MT's `(year, make, model, trim)` → fitment vehicle ID.
@@ -362,7 +420,13 @@ reporting, store assets and review, and legal — fitment guidance is advisory,
 
 **Rough v1 total: 3.5–5 months.** Phase 5 grew ~1 week (capture and calibration
 are new), offset by deleting the entire vehicle-imagery acquisition workstream —
-so net schedule is roughly flat and the cost line drops substantially.
+so net schedule is roughly flat and the cost line drops substantially. Decision 8
+(one app, not two) removes a second auth story, a second store listing, and a
+duplicate garage.
+
+**Critical path note:** Phase 1 is the only phase with no external dependency —
+no licensing, no feed, no catalog. It can run in parallel with Phase 0 and is the
+correct place to start.
 
 ---
 
@@ -435,8 +499,11 @@ implemented.
 
 ## 8. Open questions
 
-- **O1 — Separate app, or a new tab inside Maintenance Tracker?** Given decision 4,
-  a tab is tighter and roughly half the work. Leaning tab; needs a call.
+- ~~**O1 — Separate app, or a new tab?**~~ **Resolved:** one app, tabbed shell,
+  Wheels as a peer tab to Maintenance from a new Home hub (decision 8, §4c).
+- **O8 — Does the app get renamed?** "Maintenance Tracker" no longer describes a
+  product that also visualizes wheels. Affects `app.json`, store listing, and
+  icon. Cheap now, expensive after launch — worth deciding before Phase 1 ships.
 - **O2 — Keep web/PWA support for the visualizer,** or native-only for that screen?
   Affects the 2D renderer choice (§4).
 - **O3 — Existing wheel brand relationships,** or starting cold on catalog data?
