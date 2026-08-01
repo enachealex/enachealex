@@ -90,13 +90,13 @@ feeds or SEMA Data Co-op, or per-brand agreements. Product photography is
 copyrighted — scraping it is a legal problem, not a shortcut. Upside: brands
 generally *want* their wheels in a visualizer, so partnership is a real path.
 
-**3. A true profile view cannot show offset.**
+**3. A true profile view cannot show offset — so v1 uses a corner angle instead.**
 Offset is lateral. In a 90° side elevation, +35 → +15 moves the wheel ~20mm
-toward the camera — invisible. Profile view is correct for diameter, sidewall,
-fender gap, and stretch. To *see* poke vs. tuck you need a front-3/4 angle.
-**Mitigation for v1:** ship the profile view, add a **front-3/4 preset** as the
-dedicated offset view, plus a numeric poke/tuck readout. The 3D phase solves it
-properly.
+toward the camera — invisible. **Resolved:** the primary (and only) v1 view is a
+**front corner shot at 25–30° off profile**. See §4a for why that angle.
+Profile view is the degenerate no-warp case of the same compositor and can be
+added later — but it costs a second base image per vehicle, which is the
+expensive part.
 
 **4. 3D vehicle models don't scale.**
 There are 40,000+ year/make/model/trim combos and nobody licenses 40,000 accurate
@@ -140,6 +140,32 @@ identically on iOS, Android, and web with zero new dependencies. Escalate to
 React Native Skia only if masking and sidewall generation demand it (Skia's web
 build is a heavy CanvasKit/WASM payload — not free for the PWA).
 
+### 4a. Camera angle — why 25–30°
+
+The v1 view is a front corner shot, not a profile. Two forces set the angle:
+
+- **Rotating further breaks the 2D illusion.** At an angle a wheel projects as an
+  ellipse, and the flat face-on catalog photo must be perspective-warped onto it.
+  Past roughly 35–40° the render needs the wheel's *barrel and spoke sides* —
+  geometry that does not exist in a face-on photograph. Deep-dish and concave
+  spokes fail first, looking pasted on rather than mounted.
+- **Rotating less hides the offset.** A 20mm offset change projects to ~7mm of
+  apparent shift at 20°, ~14mm at 45°. Poke/tuck is read against the fender edge,
+  which the eye judges well as a relative-edge comparison — but shallower always
+  shows less.
+
+**25–30° is the compromise:** poke/tuck reads clearly, and the face stays
+foreshortened enough that a warped catalog image holds up.
+
+**This stays dependency-free.** React Native supports
+`transform: [{ perspective }, { rotateY }]` natively, and it maps to CSS
+transforms under `react-native-web` — so the corner warp runs on iOS, Android,
+and the PWA with nothing new added. Skia is likely avoidable.
+
+**What does get harder:** the tire becomes an elliptical annulus with a visible
+**tread band** on the leading edge, rather than a flat ring. New procedural work,
+but also a visual upgrade — visible tread is what sells the render.
+
 ---
 
 ## 5. Phases
@@ -150,8 +176,10 @@ Estimates assume 1–2 developers.
 Not optional. Everything downstream is priced by what this finds.
 - Trial the fitment API; validate coverage against 20 real vehicles.
 - Get written pricing *and image licensing terms* from 2–3 catalog sources.
-- **Spike:** one hardcoded car + one hardcoded wheel composited in 2D, running
-  on a real device and on web.
+- **Spike:** one hardcoded car + one hardcoded wheel composited at a 25–30°
+  corner angle (§4a), on a real device and on web. **Test a deep-dish and a
+  concave-spoke wheel specifically** — those fail first, and they decide whether
+  the warped-flat-photo approach holds or the angle has to come down.
 - Prototype the canonical vehicle resolver against real Maintenance Tracker
   records; measure the ambiguous-match rate. That number sizes Phase 2.
 
@@ -209,16 +237,23 @@ Pure TypeScript, zero UI. ~90% tests by line count.
 
 **Exit:** catalog browsable and filterable against a real vehicle.
 
-### Phase 5 — 2D visualizer (3–4 weeks) — *the v1 payoff*
-- Vehicle profile assets: side elevation per body style, each with authored
-  metadata — wheel-well anchor points (x, y), pixels-per-inch scale, and a
-  fender mask layer for correct occlusion.
-- Compositor: scale wheel image to true diameter → generate tire sidewall ring
-  parametrically from Phase 3 math → position at anchor → draw behind fender mask.
+### Phase 5 — 2D corner visualizer (3–4 weeks) — *the v1 payoff*
+- Vehicle base assets: **one front corner shot per vehicle at 25–30° off
+  profile** (§4a), each with authored metadata — wheel-well anchor points (x, y),
+  the camera angle it was shot at, pixels-per-inch scale, and a fender mask layer
+  for correct occlusion. Consistent angle across the fleet matters more than the
+  exact value; the compositor reads the angle per asset.
+- Compositor: scale wheel image to true diameter → perspective-warp the face onto
+  the projected ellipse via `perspective` + `rotateY` → generate the tire as an
+  elliptical annulus with a leading-edge tread band from Phase 3 math → translate
+  laterally by offset → draw behind fender mask.
+- **Offset renders as a real lateral translation**, not an annotation — this is
+  the whole reason for the corner angle.
 - Controls: ride height, finish swap, staggered front/rear setups.
-- **Front-3/4 preset** for offset visualization (problem 3), plus numeric
-  poke/tuck readout.
+- Numeric poke/tuck readout alongside the render.
 - **Export/share as an image.** This is the organic growth loop — do not defer it.
+- *Not in v1:* profile view. It's the no-warp case of this same compositor, so
+  the code is nearly free — but it needs a second base image per vehicle.
 
 **Exit:** a user's real tracked vehicle, with a real catalog wheel, shareable.
 
@@ -273,6 +308,8 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 | Wheel image rights unclear | Blocks launch; store rejection | Written licensing in Phase 0, before any renderer work |
 | Vehicle name matching is noisy | Wrong fitment shown → safety issue | Confidence scoring + disambiguation UI + VIN path |
 | Image normalization underestimated | Renderer output looks broken | Treat as its own workstream in Phase 4, with manual QA |
+| Vehicle base imagery is licensed and per-angle | Cost scales with views × vehicles | One angle only in v1 (§4a); revisit 3D if more angles are wanted |
+| Warped catalog photo looks pasted on | Core feature feels cheap | Hold the angle ≤30°; test deep-dish and concave spokes in Phase 0 |
 | Fitment advice taken as authoritative | Liability | Prominent advisory disclaimer; never present as a guarantee |
 | Backend is greenfield | Phase 6 slips | Start the Worker + D1 skeleton during Phase 4 |
 
@@ -287,3 +324,7 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 - **O3 — Existing wheel brand relationships,** or starting cold on catalog data?
 - **O4 — Does the Maintenance Tracker garage move to the cloud** as part of Phase 6
   accounts, or stay local-only with the visualizer owning the only backend?
+- **O5 — Where do vehicle base images come from?** Licensed manufacturer press
+  photos, commissioned shoots, or rendered from 3D models. Now the largest
+  per-vehicle cost line (§4a), and the answer that most affects whether 3D moves
+  earlier than the fast-follow slot.
