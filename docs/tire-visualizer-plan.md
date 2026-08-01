@@ -183,8 +183,16 @@ parameter the compositor needs**, deterministically:
 | Needed | Derived from |
 |---|---|
 | Camera angle θ | `cos θ = minor axis ÷ major axis` — the ellipse's squash *is* the angle |
-| Scale (px per inch) | `major axis px ÷ OE wheel diameter`, OE diameter known from fitment data |
+| Scale (px per inch) | `major axis px ÷ reference wheel diameter` (see below) |
 | Anchor point | ellipse center |
+
+**The reference diameter cannot be assumed to be OE.** Scale calibration divides
+by the diameter of the wheel *actually in the photo*. If the car is already on
+aftermarket wheels — the enthusiast core of this audience — assuming the factory
+diameter silently miscalibrates every render, with no error surfaced and no way
+for the user to notice. Calibration must therefore ask **"are these the factory
+wheels?"** and accept a current diameter when the answer is no. This applies to
+user-taken photos, not just sourced ones.
 
 No model to train, no training data, no inference cost, and it works at any angle
 on any photo. **Auto-detection is a later convenience** that pre-positions the
@@ -299,6 +307,8 @@ Pure TypeScript, zero UI. ~90% tests by line count.
 - Camera flow with a ghost overlay guiding a 25–30° corner shot; support picking
   from the library too.
 - Ellipse-fit gesture per wheel → derives angle, scale, and anchor.
+- **"Are these the factory wheels?"** step; if no, take the current wheel
+  diameter as the scale reference (§4b). Skipping this miscalibrates silently.
 - Multi-angle capture: 3–4 shots per vehicle, each calibrated, swipeable.
 - Photos and calibration stored on the vehicle record; captured once, reused.
 - Quality guardrails: reject too-dark/too-blurry, warn when the angle is too near
@@ -386,8 +396,40 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 | Warped catalog photo looks pasted on | Core feature feels cheap | Guide capture to ≤30°; test deep-dish and concave spokes in Phase 0 |
 | Poor user photos (dark, blurry, bad angle) | Bad output blamed on the app | Capture guardrails + ghost overlay + explicit angle warning (Phase 5a) |
 | User photos on the server | Privacy, moderation, plate exposure | Strip EXIF on ingest, offer plate blur, moderate anything shared publicly |
+| Users upload copyrighted images they found online | Re-imports the licensing exposure decision 2 removed | §7a: no in-app image search, neutral copy, gate public sharing (O7) |
+| Photo shows non-factory wheels | **Silent** miscalibration of every render | Ask "are these factory wheels?" at calibration; take current diameter (§4b) |
 | Fitment advice taken as authoritative | Liability | Prominent advisory disclaimer; never present as a guarantee |
 | Backend is greenfield | Phase 6 slips | Start the Worker + D1 skeleton during Phase 4 |
+
+---
+
+### 7a. Policy: user-sourced photos
+
+Users will upload images they found online — of their own model, or of the car
+they're planning to buy. This is not a feature to build or block; **the library
+picker cannot distinguish a photo the user shot from one they downloaded.** It is
+a policy question with two levers: what the UI copy encourages, and whether
+sharing is public.
+
+Images found online are effectively all copyrighted (manufacturer press shots,
+dealer listings, stock, other people's builds). A user uploading one grants the
+app no rights. Compositing it, storing it server-side, and returning a shareable
+image is reproduction and distribution as a core product loop — and DMCA safe
+harbor, which covers *hosting*, protects least where the use is a promoted
+feature. App review flags loops that direct users to go find images.
+
+**Position:**
+- **Never build in-app image search.** A "find photos of your car" browser is the
+  version that draws both a takedown and a store rejection.
+- **Keep library upload, with neutral copy.** Private personal-use compositing is
+  low-risk and is what any photo editor does.
+- **Gate public sharing** — either to in-app-captured photos, whose provenance is
+  known, or behind real notice-and-takedown. This is O7.
+- **Decline obvious watermarks** at ingest.
+
+Note the technical consequence too: sourced photos frequently show aftermarket
+wheels, which breaks scale calibration unless §4b's factory-wheel question is
+implemented.
 
 ---
 
@@ -403,7 +445,11 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 - ~~**O5 — Where do vehicle base images come from?**~~ **Resolved:** user-submitted
   photos (decision 2). No licensed vehicle imagery in v1.
 - **O6 — Is there a no-photo fallback?** A user shopping at work, or before buying
-  the car, has nothing to composite onto. Options: require a photo, ship a small
-  set of commissioned *stylized illustrations* per body style (far cheaper to
-  license than photography, and stylized art sidesteps the realism problem), or
-  accept the gap in v1.
+  the car, has nothing to composite onto. **Partially resolved** — see §7a: allow
+  library upload with neutral copy, never build in-app image search. The clean
+  fallback for the genuine no-photo case remains commissioned *stylized
+  illustrations* per body style: one-time cost, no ongoing exposure, and being
+  stylized they sidestep the photo-realism problem rather than competing with it.
+- **O7 — Sharing model.** Restrict public sharing to in-app-captured photos
+  (provenance is known), or allow open sharing and stand up real DMCA
+  notice-and-takedown? Decides how much of §7a applies. Needed before Phase 6.
