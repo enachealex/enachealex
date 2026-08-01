@@ -1,6 +1,6 @@
 # Tire & Wheel Visualizer — Implementation Plan
 
-**Status:** Planning. No implementation started.
+**Status:** Phase 1 complete (app shell). Phases 0, 2–7 not started.
 **Last updated:** 2026-08-01
 
 Goal: a mobile app where a user picks their vehicle, selects wheels and tires
@@ -176,21 +176,27 @@ export/import). It gets promoted to a genuine hub.
 Extract a shared `VehicleList` / `VehiclePicker` from today's `Home.tsx`; all
 three tabs use it. Behavior of the maintenance flow must not change.
 
-**Navigation: migrate to React Navigation** (bottom-tabs + native-stack) with
-linking config. Today's hand-rolled `Nav` union in `App.tsx` is fine for four
-screens, but the shell adds a tab bar over two stacks totaling 10+ screens.
+**Navigation: keep the hand-rolled `Nav` union.** *(Reversed during Phase 1 —
+see below.)*
 
-The deciding factor is not screen count, though — it's that **Phase 6 requires
-share links for saved builds**, and deep linking effectively requires a real
-linking setup. React Navigation gives that plus proper URLs on web, which the
-PWA wants anyway.
+This plan originally called for migrating to React Navigation. The justification
+was that **Phase 6 needed share links**, and deep linking effectively requires
+real linking config. **Decision 9 replaced share links with the OS share sheet**,
+which removed that requirement entirely. What remained was screen count alone —
+not enough to justify replacing working navigation.
 
-**The migration risk is specific and must be respected:** `App.tsx` contains
-hand-built PWA history handling (`ensureHistoryEntry`, a `popstate` listener,
-`parentOf`) so the phone back gesture navigates in-app instead of closing the
-PWA. React Navigation's linking layer replaces that. Regressing it is the most
-likely way this phase breaks something users already rely on — treat it as the
-phase's primary test target.
+Decisive factor against migrating: `App.tsx` hand-builds PWA history
+(`ensureHistoryEntry`, a `popstate` listener, `parentOf`) so the phone back
+gesture navigates in-app rather than closing the PWA. React Navigation's linking
+layer would replace all of it, and that was already flagged as the most likely
+way this phase breaks something users rely on. With the deep-linking driver gone,
+that risk buys nothing.
+
+**What shipped instead:** `Nav` gained a tab dimension. Pushed screens record the
+tab they came from (`from: TabKey`), so backing out of a vehicle returns to that
+tab rather than always landing on home. `parentOf`, `tabOf`, and `isTabRoot` are
+pure functions in `src/shell/nav.ts` with unit tests, including that repeatedly
+walking parents always terminates at home. Zero new dependencies.
 
 *Considered and rejected:* `expo-router`. Better file-based ergonomics, but
 migrating existing screens into file-based routes is a larger restructure than
@@ -362,30 +368,39 @@ Not optional. Everything downstream is priced by what this finds.
 
 **Exit:** known monthly data cost, and a wheel visibly on a car on a phone.
 
-### Phase 1 — App shell & Home page (2 weeks)
+### Phase 1 — App shell & Home page (2 weeks) — **DONE**
 
-**The one phase not blocked by Phase 0** — it needs no licensing, no fitment
-feed, no catalog. It can start immediately and run in parallel.
+**The one phase not blocked by Phase 0** — no licensing, no fitment feed, no
+catalog. Landed in two commits on `claude/vehicle-tire-review-app-h5lse2`:
 
-- Restructure `src/` into `shell/`, `core/`, `features/` (§4). Pure moves, no
-  behavior change; land this as its own commit so the diff stays reviewable.
-- Move `VehicleRecord` and `storage.ts` to `core/garage` — both tabs read it.
-- Migrate `App.tsx`'s hand-rolled `Nav` to React Navigation (bottom-tabs +
-  native-stack) with linking config.
-- Build the **Home hub**: vehicle cards showing maintenance-due badge *and*
-  saved-builds count; add-vehicle CTA; app chrome relocated.
-- Extract shared `VehicleList` / `VehiclePicker` from today's `Home.tsx`.
-- Stub the **Wheels** tab so the shell is complete and navigable end to end.
-- CI: typecheck + Jest. Note `testMatch` is `**/__tests__/**/*.test.ts` and so
-  excludes `.tsx` — widen it if component tests are wanted.
+1. **`Reorganize src into core, features, and shell`** — pure moves plus the
+   import updates they force. Zero behavior change; git records every move as a
+   rename. Verified independently: tsc clean, original 24 tests pass.
+2. **`Add tabbed shell with a Home hub and a Wheels tab`** — the new shell.
 
-**Primary test target — do not skip.** `App.tsx` currently hand-rolls PWA
-history (`ensureHistoryEntry`, `popstate`, `parentOf`) so the phone back gesture
-navigates in-app rather than closing the PWA. React Navigation's linking layer
-replaces it. Verify on a real installed PWA, not just a desktop browser.
+Delivered:
+- `src/` regrouped into `core/` (types, storage, backup, vPIC/EPA client),
+  `features/maintenance/`, `features/wheels/`, and `shell/`. The garage moved to
+  `core/` because it stops being maintenance-owned once a second feature reads it.
+- Bottom tabs — Home, Maintenance, Wheels — in normal flow below the screen, so
+  scrolling content is never hidden behind the bar and no inset is needed.
+- **Home hub**: each vehicle card carries maintenance status and offers both
+  features directly. App chrome (reminders, backup) stays here.
+- `VehicleList` / `VehicleCard` extracted so all three tabs render the garage
+  identically instead of diverging.
+- `Nav` extended with a tab dimension; `nav.ts` pure and unit-tested.
+- Wheels tab stubbed, stating plainly that it isn't built rather than faking it.
 
-**Exit:** all existing maintenance flows behave identically, PWA back gesture
-still works, and an empty Wheels tab is reachable from Home.
+**Verified:** tsc clean, 34 tests pass (24 existing + 10 new nav tests), web
+bundle builds (332 modules).
+
+**Not yet verified — needs a device.** The PWA back gesture and Android hardware
+back were left structurally intact (that machinery was deliberately not
+replaced), but they have not been exercised on real hardware. Do this before
+building on top of the shell.
+
+**Deferred to Phase 6:** saved-builds count on Home cards, which needs builds to
+exist first. Showing "0 builds" on every card would be noise.
 
 ### Phase 2 — Vehicle identity & selection (2 weeks)
 - **Canonical resolver:** MT's `(year, make, model, trim)` → fitment vehicle ID.
