@@ -130,21 +130,29 @@ matters for share rate, which is the growth loop (§5, Phase 5).
 store listing — the visualizer ships inside the existing app as a peer tab to
 maintenance, over a shared garage.
 
+As built in Phase 1 (`+` marks what later phases add):
+
 ```
 src/
-  shell/          tab navigator, Home hub, settings
-  core/
-    vehicle/      types, vPIC/EPA clients, canonical resolver   (existing api/vehicles.ts)
-    fitment/      pure TS: size math, offset math, clearance warnings
-    garage/       VehicleRecord store, shared by both features  (existing storage.ts)
+  shell/          nav.ts, TabBar, HomeHub, VehicleList
+  core/           types.ts, storage.ts, backup.ts, vehicles.ts (vPIC/EPA)
+                + resolver.ts   canonical vehicle identity      (Phase 2)
+                + fitment/      pure TS size, offset, clearance (Phase 3)
   features/
-    maintenance/  existing screens: Dashboard, VehicleSetup, MileageSetup
-    wheels/       capture, calibrate, catalog, compositor, builds
-  components/     shared ui + theme                             (existing)
+    maintenance/  logic, cadence, schedule, Dashboard, VehicleSetup,
+                  MileageSetup, MaintenanceTab
+    wheels/       WheelsTab (shell only)
+                + capture, calibrate, catalog, compositor, builds
+  components/     shared ui primitives
+  theme.ts, notifications.ts, webNotifications.ts, pushConfig.ts, webViewport.ts
 services/
-  fitment-proxy/  Cloudflare Worker: stateless key-holder + cache (§4d). No user data.
   push-worker/    existing
+                + fitment-proxy/  stateless key-holder + cache (§4d). No user data.
 ```
+
+`core/` is kept flat rather than split into `vehicle/`, `garage/`, and `fitment/`
+subdirectories — at four files, nesting would be structure without benefit.
+Split it when `fitment/` lands, since that one is genuinely a module.
 
 No auth service, no database, no object storage — decision 9.
 
