@@ -22,6 +22,7 @@ captured angles.
 | 6 | Wheels vs. tires | Wheel *models* + tire *sizes*. Tire brand/sidewall detail deferred. |
 | 7 | "Rotate" view | **Multi-angle photo capture** + swipe, not a 3D model (§4b) |
 | 8 | App structure | **One app, tabbed shell.** Wheels is a peer tab to Maintenance over a shared garage, reached from a new Home hub (§4c). |
+| 9 | Photo storage | **Photos never leave the device.** Sync build + calibration data only; share uploads one composite on explicit user action (§4d). |
 
 ---
 
@@ -183,6 +184,35 @@ phase's primary test target.
 *Considered and rejected:* `expo-router`. Better file-based ergonomics, but
 migrating existing screens into file-based routes is a larger restructure than
 React Navigation, which it's built on top of anyway.
+
+### 4d. Local-first photo storage
+
+Maintenance Tracker is local-only today — AsyncStorage, with the push worker as
+its only server. The visualizer inherits that, and decision 9 makes it explicit:
+
+| Data | Where it lives | Size |
+|---|---|---|
+| Base photos + capture source | **Device only, never uploaded** | MBs |
+| Build + calibration (wheel, sizes, offset, angle, scale, anchor) | Synced with the account | ~hundreds of bytes per vehicle |
+| Shared composite | Uploaded **only** on explicit share tap | one image, per user action |
+
+Two features in this plan would otherwise break local-only: accounts with synced
+builds (decision 5, Phase 6) and server-rendered share previews (Phase 6). This
+split keeps both. Sync carries calibration *numbers*, not pixels — enough to
+reproduce a build on another device that has its own photo of the same car.
+
+**What this buys beyond the obvious:** the EXIF/GPS-stripping and license-plate
+concerns collapse, since those were server-side risks. Object storage cost drops
+to near zero. And the share upload becomes a clean per-image consent boundary
+rather than ambient background sync.
+
+**What it costs — decide deliberately, don't discover it later.** `backup.ts` is
+a pretty-printed JSON blob shared via the OS share sheet or downloaded on web.
+Base64-encoding photos into it takes it from kilobytes to tens of megabytes. So
+either photos are excluded from backup — a user switching phones re-shoots and
+re-calibrates — or backup grows a real container format. Since calibration is one
+gesture per vehicle, **re-shoot on device change is the recommended v1 answer**.
+This is O9.
 
 **2D renderer:** start with layered `<Image>` + transforms, which works
 identically on iOS, Android, and web with zero new dependencies. Escalate to
@@ -371,7 +401,9 @@ Pure TypeScript, zero UI. ~90% tests by line count.
 - Photos and calibration stored on the vehicle record; captured once, reused.
 - Quality guardrails: reject too-dark/too-blurry, warn when the angle is too near
   profile for offset to read.
-- **Strip EXIF on ingest** (GPS especially), and offer license-plate blur.
+- Photos persist to local storage only (decision 9, §4d). **Strip EXIF and offer
+  license-plate blur at the share boundary**, not at ingest — the photo never
+  leaves the device otherwise, and stripping on the way out is where it matters.
 
 **5b. Compositor**
 - Mask out the original wheel; fill where the new OD is smaller (§4b, hard part 1).
@@ -391,15 +423,19 @@ convenience), and any licensed or generic stock vehicle imagery.
 
 **Exit:** a user's real tracked vehicle, with a real catalog wheel, shareable.
 
-### Phase 6 — Accounts, garage & commerce (2–3 weeks)
+### Phase 6 — Accounts, builds & commerce (2–3 weeks)
 - Cloudflare Worker API + D1: auth, saved builds, sync.
+- **Sync carries build + calibration data only — never photos** (decision 9,
+  §4d). A build restored on a second device re-composites against that device's
+  own photo of the car.
 - Save/name/revisit builds; side-by-side comparison of two builds.
-- Share links with server-rendered preview images.
+- Share links. **The composite is rendered on-device and uploaded on the share
+  tap** — the server cannot render a preview, because it has no photo. EXIF strip
+  and optional plate blur happen here, on the way out.
 - **Affiliate buy links** (Tire Rack, Discount Tire, Fitment Industries) with
   click attribution. The visualizer is the funnel; the click-out is the revenue.
-- **Write-back to Maintenance Tracker:** a purchased wheel/tire set becomes a
-  tracked item with mileage. This is the integration that makes two apps feel
-  like one product.
+- **Write-back to the Maintenance tab:** a purchased wheel/tire set becomes a
+  tracked item with mileage — the payoff of the shared garage (decision 8).
 
 ### Phase 7 — Hardening & launch (2–3 weeks)
 Accessibility, offline behavior, analytics on the fitment funnel, crash
@@ -459,41 +495,38 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 | Old wheel not fully removed on OD change | Visible artifact | Plus sizing keeps OD ~constant, so most swaps occlude cleanly; fill path tested in Phase 0 |
 | Warped catalog photo looks pasted on | Core feature feels cheap | Guide capture to ≤30°; test deep-dish and concave spokes in Phase 0 |
 | Poor user photos (dark, blurry, bad angle) | Bad output blamed on the app | Capture guardrails + ghost overlay + explicit angle warning (Phase 5a) |
-| User photos on the server | Privacy, moderation, plate exposure | Strip EXIF on ingest, offer plate blur, moderate anything shared publicly |
-| Users upload copyrighted images they found online | Re-imports the licensing exposure decision 2 removed | §7a: no in-app image search, neutral copy, gate public sharing (O7) |
+| Shared composites on the server | Privacy, moderation, plate exposure | Only shared images ever upload (decision 9). Strip EXIF, offer plate blur, moderate the public surface |
+| Users supply copyrighted images they found online | Largely neutralized by local-first storage (§7a) | No in-app image search; neutral copy. No service hosting, so no hosting exposure |
+| Photos excluded from backup | Device migration loses calibration | Accepted for v1 — recalibration is one gesture per vehicle (§4d, O9) |
 | Photo shows non-factory wheels | **Silent** miscalibration of every render | Ask "are these factory wheels?" at calibration; take current diameter (§4b) |
 | Fitment advice taken as authoritative | Liability | Prominent advisory disclaimer; never present as a guarantee |
 | Backend is greenfield | Phase 6 slips | Start the Worker + D1 skeleton during Phase 4 |
 
 ---
 
-### 7a. Policy: user-sourced photos
+### 7a. User-sourced photos — scoped by the local-first architecture
 
-Users will upload images they found online — of their own model, or of the car
-they're planning to buy. This is not a feature to build or block; **the library
-picker cannot distinguish a photo the user shot from one they downloaded.** It is
-a policy question with two levers: what the UI copy encourages, and whether
-sharing is public.
+Users will supply images they found online, of their own model or of a car
+they're considering. The library picker cannot distinguish those from photos they
+shot, so this is not a feature to build or block.
 
-Images found online are effectively all copyrighted (manufacturer press shots,
-dealer listings, stock, other people's builds). A user uploading one grants the
-app no rights. Compositing it, storing it server-side, and returning a shareable
-image is reproduction and distribution as a core product loop — and DMCA safe
-harbor, which covers *hosting*, protects least where the use is a promoted
-feature. App review flags loops that direct users to go find images.
+**It is also not a service-liability question, because photos stay on the
+device.** Compositing and storage are local (decision 9), so the service never
+copies, hosts, or distributes the image — there is no hosting, therefore no
+hosting exposure. This is how any photo editor operates. The concern applies only
+where content *leaves* the device.
 
-**Position:**
-- **Never build in-app image search.** A "find photos of your car" browser is the
-  version that draws both a takedown and a store rejection.
-- **Keep library upload, with neutral copy.** Private personal-use compositing is
-  low-risk and is what any photo editor does.
-- **Gate public sharing** — either to in-app-captured photos, whose provenance is
-  known, or behind real notice-and-takedown. This is O7.
-- **Decline obvious watermarks** at ingest.
+**What that leaves:**
+- **Never build in-app image search.** A "find photos of your car" browser is
+  active encouragement rather than neutral tooling, and is the version that draws
+  both a takedown and a store rejection. One UI constraint, nothing more.
+- **Keep library upload with neutral copy.** No further gating needed.
+- **The share boundary is the only real decision** — see decision 9 and O7. Share
+  uploads one composite, on explicit user action.
 
-Note the technical consequence too: sourced photos frequently show aftermarket
-wheels, which breaks scale calibration unless §4b's factory-wheel question is
-implemented.
+Note the technical consequence, which is unrelated to any of the above: sourced
+photos frequently show aftermarket wheels, which breaks scale calibration unless
+§4b's factory-wheel question is implemented.
 
 ---
 
@@ -507,8 +540,10 @@ implemented.
 - **O2 — Keep web/PWA support for the visualizer,** or native-only for that screen?
   Affects the 2D renderer choice (§4).
 - **O3 — Existing wheel brand relationships,** or starting cold on catalog data?
-- **O4 — Does the Maintenance Tracker garage move to the cloud** as part of Phase 6
-  accounts, or stay local-only with the visualizer owning the only backend?
+- **O4 — Does the garage move to the cloud** as part of Phase 6 accounts, or stay
+  local-only? Decision 9 already answers the photo half — photos never sync. What
+  remains is whether vehicle records and maintenance history sync, which is now a
+  Maintenance-tab question more than a visualizer one.
 - ~~**O5 — Where do vehicle base images come from?**~~ **Resolved:** user-submitted
   photos (decision 2). No licensed vehicle imagery in v1.
 - **O6 — Is there a no-photo fallback?** A user shopping at work, or before buying
@@ -517,6 +552,10 @@ implemented.
   fallback for the genuine no-photo case remains commissioned *stylized
   illustrations* per body style: one-time cost, no ongoing exposure, and being
   stylized they sidestep the photo-realism problem rather than competing with it.
-- **O7 — Sharing model.** Restrict public sharing to in-app-captured photos
-  (provenance is known), or allow open sharing and stand up real DMCA
-  notice-and-takedown? Decides how much of §7a applies. Needed before Phase 6.
+- **O7 — Is the share surface public or private?** Decision 9 narrows this a lot:
+  the only thing uploaded is a composite the user explicitly shared. If share
+  links are unlisted URLs, that's effectively it. If there's ever a public gallery
+  or feed, that surface needs moderation and notice-and-takedown. Needed before
+  Phase 6.
+- **O9 — Photos in backup?** Recommended v1 answer is no: exclude them, accept
+  re-shoot on device change (§4d). Revisit if users push back.
