@@ -1,6 +1,6 @@
 # Tire & Wheel Visualizer — Implementation Plan
 
-**Status:** Phase 1 complete (app shell). Phases 0, 2–7 not started.
+**Status:** Phases 1 and 3 complete. Phase 0 (vendor contact) and 2, 4–7 not started.
 **Last updated:** 2026-08-01
 
 Goal: a mobile app where a user picks their vehicle, selects wheels and tires
@@ -422,23 +422,42 @@ exist first. Showing "0 builds" on every card would be noise.
 **Exit:** every vehicle in a real tracker garage resolves to a fitment ID or
 prompts sensibly.
 
-### Phase 3 — Fitment engine (2 weeks, parallel with Phase 2)
-Pure TypeScript, zero UI. ~90% tests by line count.
+### Phase 3 — Fitment engine (2 weeks) — **DONE**
 
-- **Size parsing:** `275/40R20`, `33x12.50R17`, metric and flotation.
-- **Derived geometry:**
-  - sidewall height (mm) = section width × aspect ÷ 100
-  - overall diameter = rim (in × 25.4) + 2 × sidewall
-  - revs/mile = 63360 ÷ (π × diameter in inches)
-- **Comparison vs. OE:** speedometer error %, diameter delta, width delta.
-- **Offset math:** ET ↔ backspacing; poke/tuck delta = OE offset − new offset
-  (lower offset = more poke).
-- **Clearance warnings:** fender rub, strut clearance, caliper clearance, load
-  index or speed rating below OE.
-- **Custom sizes:** free-form entry, validated and *warned* against — never
-  blocked. Someone running a deliberately aggressive setup must be able to see it.
+Pure TypeScript in `src/core/fitment/`. No network, no storage, no React, so it
+was buildable with zero external dependencies — like Phase 1, unblocked by
+Phase 0.
 
-**Exit:** fixture-based test suite green against known-good fitment data.
+Delivered — `size.ts`, `geometry.ts`, `compare.ts`, `ratings.ts`:
+- **Parsing:** metric (`275/40R20`, `P225/45R17 91V`, `LT275/70R18`,
+  `275/40ZR20`) and flotation (`33x12.50R17`). Flotation states overall diameter
+  instead of aspect ratio, so the ratio is recovered on parse and both formats
+  share one geometry path.
+- **Geometry:** sidewall, overall diameter, circumference, revs/mile (unloaded —
+  documented, since published figures run a few percent higher).
+- **Offset:** ET ↔ backspacing both directions, and where each rim edge sits
+  relative to the hub face. That last one is what turns an offset number into
+  the lateral shift the corner-angle render displays.
+- **Comparison:** diameter/width/sidewall deltas, speedometer error, stance
+  delta, and warnings — diameter past 3% and 5%, load index or speed rating
+  below factory, poke and inner clearance, stretched/bulged rim width, and a
+  wheel that cannot physically mount the tire.
+
+**Parsing is separate from judgment**, which is what makes custom sizes work:
+`parseTireSize` returns null only for unreadable input, `validateTireSize`
+decides whether a size looks sensible, and `compareFitment` never blocks. An
+aggressive setup returns full geometry plus a list of warnings, because looking
+at one is a legitimate thing to want.
+
+**116 tests.** Hand-worked values are pinned rather than snapshotted (a
+275/40R20 is asserted at 110mm sidewall, 728mm overall), plus round-trip
+identities for offset/backspacing and parse/format.
+
+**One test worth calling out:** going up a wheel size holds overall diameter
+within one percent. That is the invariant §4b leans on — it is *why* a swapped
+wheel covers nearly the same pixels and plain occlusion hides the original.
+
+**Verified:** tsc clean, 116 tests pass, web bundle builds.
 
 ### Phase 4 — Wheel catalog (2–3 weeks)
 - Ingestion: normalize vendor feeds to one schema (brand, model, finish,
