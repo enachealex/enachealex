@@ -1,12 +1,13 @@
 # Tire & Wheel Visualizer — Implementation Plan
 
-**Status:** Phases 1 and 3 complete. Phase 0 (vendor contact) and 2, 4–7 not started.
+**Status:** Phases 1 and 3 complete. Phase 5 is next and **nothing external blocks it** (§6c).
 **Last updated:** 2026-08-01
 
-Goal: a mobile app where a user picks their vehicle, selects wheels and tires
-(catalog or custom size), and sees the result composited onto **a photo of their
-own car** — with correct diameter, sidewall, and offset — viewable from multiple
-captured angles.
+Goal: a mobile app where a user picks their vehicle, enters or picks a tire
+size, and sees it composited onto **a photo of their own car** at the correct
+diameter and sidewall — so they can work out what size to shop for before
+buying. Offset, wheel catalogs, and multi-angle views are deliberately out of
+v1 (decisions 10 and 11).
 
 ---
 
@@ -23,6 +24,8 @@ captured angles.
 | 7 | "Rotate" view | **Multi-angle photo capture** + swipe, not a 3D model (§4b) |
 | 8 | App structure | **One app, tabbed shell.** Wheels is a peer tab to Maintenance over a shared garage, reached from a new Home hub (§4c). |
 | 9 | User data | **Fully local.** Photos, builds, calibration, and garage all live in device storage. Nothing about the user is uploaded, ever (§4d). |
+| 10 | v1 view | **Profile (side-on), tire size only — offset not shown.** The goal is helping people work out what size to shop for (§4a). |
+| 11 | Fitment data source | **User-supplied tire size**, from the federally mandated door placard or the tire sidewall. No licensed feed in v1 (§6). |
 
 ---
 
@@ -91,10 +94,12 @@ Anything picked for the 2D compositor should degrade gracefully to
 
 ## 3. The four hard problems
 
-**1. Fitment data is licensed, not free.**
-vPIC gives the vehicle tree but no wheel/tire specs. Bolt pattern, hub bore,
-OE tire sizes, and factory offset ranges all require a commercial feed. There is
-no legitimate free source. Priced in §6.
+**1. Fitment data is licensed — *sidestepped by decisions 10 and 11*.**
+vPIC gives the vehicle tree but no wheel or tire specs, and every commercial
+feed is quote-gated. **A profile view of tire size needs neither.** It needs the
+size on the car now and the size being considered, both of which the user can
+read off a federally mandated door placard or the tire sidewall. Full detail and
+the vendor survey are in §6.
 
 **2. Wheel catalogs and images have no universal API.**
 Every brand publishes its own catalog. Aggregation happens through distributor
@@ -102,13 +107,15 @@ feeds or SEMA Data Co-op, or per-brand agreements. Product photography is
 copyrighted — scraping it is a legal problem, not a shortcut. Upside: brands
 generally *want* their wheels in a visualizer, so partnership is a real path.
 
-**3. A true profile view cannot show offset — so v1 uses a corner angle instead.**
-Offset is lateral. In a 90° side elevation, +35 → +15 moves the wheel ~20mm
-toward the camera — invisible. **Resolved:** the primary (and only) v1 view is a
-**front corner shot at 25–30° off profile**. See §4a for why that angle.
-Profile view is the degenerate no-warp case of the same compositor and can be
-added later — but it costs a second base image per vehicle, which is the
-expensive part.
+**3. A profile view cannot show offset — accepted, and v1 does not try.**
+Offset is lateral: in a 90° side elevation, +35 → +15 moves the wheel ~20mm
+toward the camera and is invisible. Decision 10 accepts that and scopes v1 to
+**tire size in profile**, which profile shows perfectly well — diameter,
+sidewall height, and how the tire fills the arch are exactly the questions
+someone has when working out what to buy.
+
+This is a simplification, not a limitation to work around. §4a covers what it
+buys: no perspective warp, an easier photo to take, and no wheel catalog.
 
 **4. Vehicle imagery doesn't scale — *solved by decision 2*.**
 Originally this plan needed either licensed vehicle photography (per angle, per
@@ -273,34 +280,39 @@ identically on iOS, Android, and web with zero new dependencies. Escalate to
 React Native Skia only if masking and sidewall generation demand it (Skia's web
 build is a heavy CanvasKit/WASM payload — not free for the PWA).
 
-### 4a. Camera angle
+### 4a. Profile view — what decision 10 buys
 
-The target capture is a **front corner shot, 25–30° off profile**. Two forces set
-that range:
+v1 renders a **square-on side view**. Earlier revisions of this plan specified a
+25–30° corner shot so that offset would be visible; decision 10 drops offset from
+v1, and with it the reason for the angle. Four things fall out:
 
-- **Rotating further breaks the 2D illusion.** At an angle a wheel projects as an
-  ellipse, and the flat face-on catalog photo must be perspective-warped onto it.
-  Past roughly 35–40° the render needs the wheel's *barrel and spoke sides* —
-  geometry that does not exist in a face-on photograph. Deep-dish and concave
-  spokes fail first, looking pasted on rather than mounted.
-- **Rotating less hides the offset.** A 20mm offset change projects to ~7mm of
-  apparent shift at 20°, ~14mm at 45°. Poke/tuck is read against the fender edge,
-  which the eye judges well as a relative-edge comparison — but shallower always
-  shows less.
+- **No perspective warp.** Square-on, a wheel is a circle, not an ellipse. The
+  compositor scales rather than projects, which removes the hardest part of the
+  render and the one most likely to look pasted-on (deep-dish and concave spokes
+  were the risk).
+- **A far easier photo to ask for.** "Stand square to the side of the car" is an
+  instruction people follow correctly; "stand at 25–30° off the centreline" is
+  not. Capture quality was a named risk and this substantially defuses it.
+- **Calibration simplifies to a circle.** The ellipse gesture in §4b collapses to
+  a diameter — the user drags a circle to match their wheel. Scale and anchor
+  still come free; the angle term is simply not needed.
+- **No wheel catalog required.** See below.
 
-Since photos are user-supplied, this is **capture guidance, not an asset spec** —
-a ghost overlay in the camera showing where to stand. The compositor handles
-whatever angle it actually receives, measured per §4b, and warns when a photo is
-too close to profile for offset to be legible.
+**Rendering a size change without a catalog.** The user is asking "what size
+should I shop for", not "what does this specific rim look like". So v1
+**re-scales the user's own wheel** — cropped from their photo — to the new rim
+diameter, and regenerates the tire sidewall at the new height around it. Their
+actual wheel, shown at the proportions of the size they are considering.
 
-**The warp stays dependency-free.** React Native supports
-`transform: [{ perspective }, { rotateY }]` natively, and it maps to CSS
-transforms under `react-native-web` — so it runs on iOS, Android, and the PWA
-with nothing new added. Skia is likely avoidable.
+Be straight about what that is and isn't: it shows **size and proportion
+faithfully, not a different wheel design**. Seeing an alternative rim is what
+the catalog (Phase 4) is for, and it is deferred. For the stated goal — working
+out what to buy — proportion is the answer.
 
-**What does get harder:** the tire becomes an elliptical annulus with a visible
-**tread band** on the leading edge, rather than a flat ring. New procedural work,
-but also a visual upgrade — visible tread is what sells the render.
+**Offset is not silently dropped.** The engine already computes poke and inner
+clearance (Phase 3), so where a size or wheel change moves the wheel laterally
+is still reported **numerically**. It is simply not drawn, because a profile
+view would be lying if it tried.
 
 ### 4b. Photo capture & calibration — no ML required for v1
 
@@ -309,17 +321,23 @@ parameter the compositor needs**, deterministically:
 
 | Needed | Derived from |
 |---|---|
-| Camera angle θ | `cos θ = minor axis ÷ major axis` — the ellipse's squash *is* the angle |
-| Scale (px per inch) | `major axis px ÷ reference wheel diameter` (see below) |
-| Anchor point | ellipse center |
+| Scale (px per inch) | `circle diameter px ÷ reference wheel diameter` (see below) |
+| Anchor point | circle centre |
+
+*(Camera angle was the third output when v1 used a corner shot. Square-on, it is
+fixed at zero — see §4a. The gesture is a circle, not an ellipse.)*
 
 **The reference diameter cannot be assumed to be OE.** Scale calibration divides
 by the diameter of the wheel *actually in the photo*. If the car is already on
 aftermarket wheels — the enthusiast core of this audience — assuming the factory
 diameter silently miscalibrates every render, with no error surfaced and no way
-for the user to notice. Calibration must therefore ask **"are these the factory
-wheels?"** and accept a current diameter when the answer is no. This applies to
-user-taken photos, not just sourced ones.
+for the user to notice.
+
+This is why decision 11 reads the size **off the tire sidewall** rather than
+looking it up: the sidewall states what is fitted, an API states what shipped.
+Calibration asks for the current size, offering the placard value (§6a) as the
+default and letting the user correct it. A vendor lookup could not do this
+correctly even if we paid for one.
 
 No model to train, no training data, no inference cost, and it works at any angle
 on any photo. **Auto-detection is a later convenience** that pre-positions the
@@ -358,23 +376,23 @@ mirrors the Maintenance Tracker garage model.
 
 Estimates assume 1–2 developers.
 
-### Phase 0 — De-risking (1–2 weeks)
-Not optional. Everything downstream is priced by what this finds.
-- Trial the fitment API; validate coverage against 20 real vehicles.
-- Get written pricing *and image licensing terms* from 2–3 catalog sources.
-- **Spike:** composite a catalog wheel onto a **real phone photo of a real car**,
-  calibrated by the ellipse gesture (§4b), on device and on web. Three things
-  this must answer, in priority order:
-  1. **Does the lighting match hold up?** Shoot the same car in harsh noon sun,
-     overcast, and golden hour. This is the largest quality risk in the plan.
-  2. **Does old-wheel removal work under a real OD change?** Not just the
-     constant-OD plus-size case that occlusion handles for free.
-  3. **Do deep-dish and concave-spoke wheels survive the warp?** They fail first,
-     and they decide whether 30° holds or the guidance angle comes down.
-- Prototype the canonical vehicle resolver against real Maintenance Tracker
-  records; measure the ambiguous-match rate. That number sizes Phase 2.
+### Phase 0 — De-risking — **mostly obsolete**
 
-**Exit:** known monthly data cost, and a wheel visibly on a car on a phone.
+Originally: trial a fitment API, get written pricing and image licensing from
+catalog vendors, and spike the corner-angle composite. Decisions 10 and 11
+removed the first two, and §6b found that vendor pricing is quote-gated
+everywhere, so waiting on procurement would block the product for no benefit.
+
+**What survives, folded into Phase 5:** the composite spike. It still has to be
+proved on a real phone photo of a real car, and the risk order is unchanged:
+
+1. **Does the lighting match hold up?** Shoot the same car in harsh noon sun,
+   overcast, and golden hour. Still the largest quality risk in the plan.
+2. **Does old-wheel removal work under a real diameter change?** Not just the
+   constant-OD plus-size case that occlusion handles for free.
+
+*(The third spike — deep-dish and concave spokes surviving a perspective warp —
+is moot: square-on, there is no warp.)*
 
 ### Phase 1 — App shell & Home page (2 weeks) — **DONE**
 
@@ -410,17 +428,20 @@ building on top of the shell.
 **Deferred to Phase 6:** saved-builds count on Home cards, which needs builds to
 exist first. Showing "0 builds" on every card would be noise.
 
-### Phase 2 — Vehicle identity & selection (2 weeks)
-- **Canonical resolver:** MT's `(year, make, model, trim)` → fitment vehicle ID.
-  Fuzzy match, confidence score, cached. Reuse the normalization already proven
-  in `getTrims()`.
-- Disambiguation UI for low-confidence matches ("which of these is your Camry?").
-- **VIN scan** (camera → barcode → vPIC decode) as the high-accuracy fast path.
-  Recommended: VIN sidesteps the whole string-matching problem for new vehicles.
-- Import flow from the Maintenance Tracker garage.
+### Phase 2 — Vehicle identity & selection — **DROPPED from v1**
 
-**Exit:** every vehicle in a real tracker garage resolves to a fitment ID or
-prompts sensibly.
+This phase existed to resolve Maintenance Tracker's free-text
+`(year, make, model, trim)` into a canonical vehicle ID that a **vendor fitment
+API** could be keyed on. Decision 11 removes the vendor lookup, so there is
+nothing to key: the tire size comes from the user, who does not need their car
+disambiguated against someone else's taxonomy to type it in.
+
+It returns if and when a vendor prefill is added (§6c) — the naming mismatch
+described in §2(a) is real and has not gone away, it is simply no longer on the
+critical path.
+
+**VIN scanning** was folded in here and is likewise deferred. Worth revisiting
+as a convenience later, not needed to ship.
 
 ### Phase 3 — Fitment engine (2 weeks) — **DONE**
 
@@ -459,51 +480,55 @@ wheel covers nearly the same pixels and plain occlusion hides the original.
 
 **Verified:** tsc clean, 116 tests pass, web bundle builds.
 
-### Phase 4 — Wheel catalog (2–3 weeks)
-- Ingestion: normalize vendor feeds to one schema (brand, model, finish,
-  diameter, width, offset, bolt pattern, hub bore, load rating, weight, price).
-- **Image normalization — the underrated part.** Every brand shoots wheels
-  differently. The compositor needs every image center-cropped, square,
-  transparent-background, true face-on, at a known pixel-per-inch. Without this
-  the renderer produces garbage. Budget real time and manual QA here.
-- Browse UI with faceted filters, and a **"Fits my vehicle"** filter driven by
-  Phase 3 — the core value proposition.
+### Phase 4 — Wheel catalog — **DEFERRED past v1**
 
-**Exit:** catalog browsable and filterable against a real vehicle.
+Aggregating vendor feeds, normalising every brand's product photography to a
+common face-on square at a known pixel-per-inch, and licensing the imagery was
+the single largest workstream in this plan and the only remaining licensing
+exposure.
 
-### Phase 5 — Photo capture, calibration & compositor (4–5 weeks) — *the v1 payoff*
+Decision 10 removes it from v1: the compositor re-scales the user's own wheel
+(§4a), so nothing needs to be licensed to answer "what size should I shop for".
 
-**5a. Capture & calibration (§4b)**
-- Camera flow with a ghost overlay guiding a 25–30° corner shot; support picking
-  from the library too.
-- Ellipse-fit gesture per wheel → derives angle, scale, and anchor.
-- **"Are these the factory wheels?"** step; if no, take the current wheel
-  diameter as the scale reference (§4b). Skipping this miscalibrates silently.
-- Multi-angle capture: 3–4 shots per vehicle, each calibrated, swipeable.
+This is the phase to revive when the product moves from *what size* to *which
+wheel* — at which point the image-normalisation work described previously still
+applies in full, and should still be treated as its own workstream with manual
+QA rather than an afternoon of scripting.
+
+### Phase 5 — Photo capture, calibration & profile compositor (3–4 weeks) — *the v1 payoff*
+
+**Unblocked. Nothing external is required to start this.**
+
+**5a. Tire size input (§6)**
+- Manual entry, parsed by the Phase 3 engine, which already accepts metric and
+  flotation and warns rather than blocks.
+- **Placard OCR** as the fast path: photograph the driver's B-pillar sticker,
+  read the factory size off it. Federally mandated to exist, so this works on
+  every US vehicle under 10,000lb GVWR (§6a).
+- Ask for the size **currently fitted**, defaulting to the placard value. On a
+  modified car these differ, and the fitted one is what calibration needs.
+
+**5b. Capture & calibration (§4b)**
+- Camera flow guiding a **square-on side shot** — a far easier instruction to
+  follow than the corner angle earlier revisions specified (§4a).
+- Circle-fit gesture on one wheel → scale and anchor.
 - Photos and calibration stored on the vehicle record; captured once, reused.
-- Quality guardrails: reject too-dark/too-blurry, warn when the angle is too near
-  profile for offset to read.
-- Photos persist to local storage only (decision 9, §4d). **Strip EXIF and offer
-  license-plate blur at the share boundary**, not at ingest — the photo never
-  leaves the device otherwise, and stripping on the way out is where it matters.
+- Quality guardrails: reject too-dark or too-blurry.
+- Photos persist to local storage only (decision 9). Strip EXIF and offer plate
+  blur at the share boundary, not at ingest.
 
-**5b. Compositor**
-- Mask out the original wheel; fill where the new OD is smaller (§4b, hard part 1).
-- Scale the catalog wheel to true diameter → perspective-warp onto the measured
-  ellipse via `perspective` + `rotateY` → generate the tire as an elliptical
-  annulus with a leading-edge tread band from Phase 3 math → translate laterally
-  by offset.
-- **Offset renders as a real lateral translation**, not an annotation.
-- Ambient color/exposure match + synthesized contact shadow (§4b, hard part 2).
-- Controls: ride height, finish swap, staggered front/rear setups.
-- Numeric poke/tuck readout alongside the render.
-- **Export/share as an image.** The growth loop, and far stronger now that the
-  shared image is the user's own car — do not defer it.
+**5c. Profile compositor**
+- Mask the original wheel; crop it, re-scale to the new rim diameter, and
+  regenerate the tire as an annulus at the new sidewall height (§4a).
+- No perspective warp — square-on, a wheel is a circle.
+- Side-by-side or slider against the current setup, since the entire point is
+  comparison.
+- Numeric readout from the Phase 3 engine alongside the render: diameter delta,
+  speedometer error, and any warnings.
+- **Export/share as an image** via the OS share sheet. The growth loop.
 
-*Deferred:* automatic wheel detection (pre-positions the ellipse; pure
-convenience), and any licensed or generic stock vehicle imagery.
-
-**Exit:** a user's real tracked vehicle, with a real catalog wheel, shareable.
+*Deferred:* automatic wheel detection, multi-angle capture, offset rendering,
+wheel catalog imagery.
 
 ### Phase 6 — Builds, sharing & commerce (1–2 weeks)
 
@@ -539,7 +564,11 @@ reporting, store assets and review, and legal — fitment guidance is advisory,
    `three.js` via `react-three-fiber` + `expo-gl`, per-vehicle model licensing,
    and a GLB pipeline under ~5MB at 60fps on mid-range Android.
 
-**Rough v1 total: 3–4.5 months.** Phase 5 grew ~1 week for capture and
+**Rough v1 total: 1.5–2.5 months from here.** Phases 1 and 3 are done; 2 is
+dropped, 4 deferred, and 0 largely obsolete. What remains is Phase 5 (3–4
+weeks), Phase 6 (1–2 weeks) and Phase 7 (2–3 weeks), none of them blocked.
+
+*Original estimate, for reference: 3–4.5 months.* Phase 5 grew ~1 week for capture and
 calibration, offset by deleting the vehicle-imagery acquisition workstream
 entirely. Decision 8 (one app) removes a second store listing and a duplicate
 garage. Decision 9 (no accounts) roughly halves Phase 6 — no auth, no database,
@@ -552,21 +581,69 @@ correct place to start.
 
 ---
 
-## 6. Fitment data options — to price in Phase 0
+## 6. Fitment data — research findings
 
-Figures below are directional and **must be confirmed with vendors**; published
-pricing moves and several are quote-only.
+**Headline: decision 10 removes the licensed-data dependency from v1.**
 
-| Source | What it gives | Ballpark | Notes |
-|---|---|---|---|
-| NHTSA vPIC | Vehicle tree, VIN decode | Free | Already in use. No fitment. |
-| Wheel-Size.com API | OE + aftermarket fitment, bolt pattern, offset ranges | ~$50–500/mo by tier | Cheapest credible path. Best first call. |
-| SEMA Data Co-op | Aftermarket wheel catalog + media | ~$500–2,000/yr | Membership; good for catalog + images. |
-| Distributor feeds (Turn 14, Keystone) | Catalog, stock, pricing, images | Free w/ dealer account | Requires reseller status. |
-| DataOne / Chrome Data | Full OE fitment | Enterprise, $1,000s/mo | Overkill for v1. |
+A profile view showing tire size, with no offset, needs exactly two numbers —
+the tire size currently on the car, and the size the user wants to try. It does
+not need bolt pattern, hub bore, centre bore, factory offset ranges, or a wheel
+catalog. Those were the expensive parts.
 
-**Recommended opening move:** Wheel-Size.com for fitment + SEMA Data Co-op for
-catalog and imagery. Validate both in Phase 0 before committing to either.
+### 6a. Two free sources, both already in the user's possession
+
+**The door placard is federally mandated.** Under FMVSS 110 (49 CFR 571.110),
+every vehicle with a GVWR of 4,536kg (10,000lb) or less must carry a permanently
+affixed placard on the driver's side B-pillar showing the manufacturer's
+recommended tire size, along with cold inflation pressure and capacity weight.
+This is not a data licensing question at all — it is a legal requirement on a
+sticker the user can photograph, and it gives the **factory** size.
+
+**The tire sidewall gives the current size.** Moulded into every tire, and this
+is the one the compositor actually needs: §4b calibrates scale against the wheel
+*in the photo*, which on a modified car is not the factory size. A vendor API
+returns what the car shipped with and would silently miscalibrate exactly those
+users — the enthusiast core. **On this specific point the free source is better
+than the paid one, not merely cheaper.**
+
+Both are around ten characters. Typed, that is a few seconds; the app already
+asks for a photo, so OCR of the placard is a natural extension rather than a new
+kind of request.
+
+### 6b. Commercial options, if lookup convenience is wanted later
+
+| Source | What it gives | Pricing |
+|---|---|---|
+| [Wheel-Size.com](https://developer.wheel-size.com/) | OE + aftermarket sizes, rim dimensions, offset, bolt patterns. Headline coverage 60,000+ configurations, 250+ makes, 14 regions | Free sandbox, no card, ~2–4h manual review. Paid billed yearly; **+$800/yr per additional app**. Tier prices not published |
+| [vehicledatabases.com](https://vehicledatabases.com/api/tire-wheel-fitment-specifications) | VIN or Y/M/M → tire and wheel specs | Not published |
+| [tire.vdim.app](https://tire.vdim.app/) | Search by vehicle or by tire size | Free plan advertised; detail not published |
+| [DriveRightData](https://www.infopro-digital-automotive.com/us/driverightdata/tire-fitments-database/) | OE, OE-optional and aftermarket fitments by trim | Enterprise, quote only |
+| [Fitment Group](https://fitmentgroup.com/tire-and-wheel-fitment-data/) | Tire and wheel fitment data | Enterprise, quote only |
+
+**Finding worth acting on: none of them publish tier pricing.** Every one is
+quote-gated or behind an application. Phase 0's "get written pricing" step
+therefore cannot be shortcut by research — it needs an actual application, and
+several of these sites block automated access outright. That is a reason to ship
+v1 without them rather than wait on procurement.
+
+*(NHTSA vPIC, already used for the make/model tree, does not return tire or
+wheel fitment. It remains the vehicle-identity source only.)*
+
+### 6c. Recommendation
+
+Ship v1 on user-supplied sizes: manual entry, with placard/sidewall OCR as the
+fast path. Zero cost, zero licensing, works on any vehicle in any market
+including grey imports and anything already modified, and it is the *correct*
+input for calibration rather than a compromise.
+
+Take Wheel-Size.com's free sandbox afterwards as a **prefill convenience** —
+behind the stateless proxy (§4d), so the key never ships in the app — once the
+product itself is validated. It saves the user typing; it is not load-bearing.
+
+**Consequence: nothing external blocks the roadmap any more.** Phase 2 (canonical
+vehicle resolution) existed to key a vendor lookup and is no longer needed for
+v1. Phase 4 (wheel catalog) is deferred. The path to a shippable product is
+Phase 5 → 6 → 7, all buildable now.
 
 ---
 
@@ -574,20 +651,20 @@ catalog and imagery. Validate both in Phase 0 before committing to either.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Wheel image rights unclear | Blocks launch; store rejection | Written licensing in Phase 0, before any renderer work |
-| Vehicle name matching is noisy | Wrong fitment shown → safety issue | Confidence scoring + disambiguation UI + VIN path |
-| Image normalization underestimated | Renderer output looks broken | Treat as its own workstream in Phase 4, with manual QA |
-| **Lighting mismatch makes composites look fake** | Core feature feels cheap | Largest quality risk. Ambient sampling + contact shadow; validated first in Phase 0 |
-| Old wheel not fully removed on OD change | Visible artifact | Plus sizing keeps OD ~constant, so most swaps occlude cleanly; fill path tested in Phase 0 |
-| Warped catalog photo looks pasted on | Core feature feels cheap | Guide capture to ≤30°; test deep-dish and concave spokes in Phase 0 |
-| Poor user photos (dark, blurry, bad angle) | Bad output blamed on the app | Capture guardrails + ghost overlay + explicit angle warning (Phase 5a) |
+| Wheel image rights unclear | **Retired for v1** | No catalog imagery used — the compositor rescales the user's own wheel (§4a) |
+| Vehicle name matching is noisy | **Retired for v1** | No vendor lookup to key, so nothing to match (Phase 2 dropped) |
+| Image normalization underestimated | Deferred with Phase 4 | Returns when a wheel catalog does; still its own workstream then |
+| **Lighting mismatch makes composites look fake** | Core feature feels cheap | Largest quality risk. Ambient sampling + contact shadow; validated first in Phase 5 |
+| Old wheel not fully removed on OD change | Visible artifact | Plus sizing keeps OD ~constant (pinned by test in Phase 3), so most swaps occlude cleanly; fill path tested in Phase 5 |
+| Warped wheel looks pasted on | **Retired** | Square-on means no perspective warp at all (§4a) |
+| Poor user photos (dark, blurry) | Bad output blamed on the app | Capture guardrails. Angle risk is much reduced — "stand square to the car" is an instruction people follow (§4a) |
 | Users supply copyrighted images they found online | Neutralized by decision 9 (§7a) | Nothing is uploaded, so there is no hosting exposure. One constraint only: no in-app image search |
 | **Native has no backup import today** | With no sync, native users have **no** device-migration path at all | `BACKUP_IMPORT_SUPPORTED` is web-only for lack of a file picker. Add `expo-document-picker` in Phase 6 |
 | Photos excluded from backup | Device migration loses calibration | Accepted for v1 — recalibration is one gesture per vehicle (§4d, O9) |
-| Vendor API key extracted from the app binary | Quota burned, real financial cost | Stateless proxy holds the key; app never sees it (§4d) |
-| Photo shows non-factory wheels | **Silent** miscalibration of every render | Ask "are these factory wheels?" at calibration; take current diameter (§4b) |
+| Vendor API key extracted from the app binary | Not applicable in v1 | No vendor API is called. If prefill is added later, the stateless proxy holds the key (§4d, §6c) |
+| Photo shows non-factory wheels | **Silent** miscalibration of every render | Calibrate against the size on the sidewall, not the placard or a lookup (§4b, §6a) |
 | Fitment advice taken as authoritative | Liability | Prominent advisory disclaimer; never present as a guarantee |
-| Fitment proxy needed before catalog work | Phase 4 blocked | Stateless Worker, small — stand it up during Phase 3 |
+| Users expect to browse actual wheels | v1 shows size, not wheel designs | Say so plainly in the UI; the catalog is the honest answer, and it is Phase 4 |
 
 ---
 
@@ -622,13 +699,16 @@ photos frequently show aftermarket wheels, which breaks scale calibration unless
   product that also visualizes wheels. Affects `app.json`, store listing, and
   icon. Cheap now, expensive after launch — worth deciding before Phase 1 ships.
 - **O2 — Keep web/PWA support for the visualizer,** or native-only for that screen?
-  Affects the 2D renderer choice (§4).
-- **O3 — Existing wheel brand relationships,** or starting cold on catalog data?
+  Lower stakes now: with no perspective warp, plain `<Image>` + transforms cover
+  it on all three platforms, so Skia's heavy web payload is likely avoidable (§4).
+- ~~**O3 — Existing wheel brand relationships?**~~ **Not needed for v1** — the
+  wheel catalog is deferred (Phase 4). Revisit when moving from *what size* to
+  *which wheel*.
 - ~~**O4 — Does the garage move to the cloud?**~~ **Resolved:** no. Everything
   local, no accounts (decision 9).
 - ~~**O5 — Where do vehicle base images come from?**~~ **Resolved:** user-submitted
   photos (decision 2). No licensed vehicle imagery in v1.
-- **O6 — Is there a no-photo fallback?** A user shopping at work, or before buying
+- **O6 — Is there a no-photo fallback?** *(unchanged, still open)* A user shopping at work, or before buying
   the car, has nothing to composite onto. **Partially resolved** — see §7a: allow
   library upload with neutral copy, never build in-app image search. The clean
   fallback for the genuine no-photo case remains commissioned *stylized
@@ -639,6 +719,11 @@ photos frequently show aftermarket wheels, which breaks scale calibration unless
   there is nothing to moderate (decision 9).
 - **O9 — Photos in backup?** Recommended v1 answer is no: exclude them, accept
   re-shoot on device change (§4d). Revisit if users push back.
+- **O12 — Does v1 need a tire *brand* picker?** Decision 6 deferred sidewall
+  detail, and profile-only makes brand almost invisible — a size and a sidewall
+  height look the same whoever made the tire. Affiliate links still need a
+  brand+size to hand off to a retailer, so Phase 6 needs an answer even if the
+  render does not.
 - **O10 — Is losing cross-device continuity acceptable?** Decision 9's one real
   cost. A user replacing their phone re-shoots and re-calibrates, and there is no
   "log in and it's all there." Local-only privacy is a genuine differentiator, so
