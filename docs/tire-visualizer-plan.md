@@ -1,6 +1,6 @@
 # Tire & Wheel Visualizer — Implementation Plan
 
-**Status:** Phases 1 and 3 complete. Phase 5 is next and **nothing external blocks it** (§6c).
+**Status:** Phases 1, 3 and 5 complete. Phase 6 next. **Nothing has been run on a real device yet** — that is the outstanding gap.
 **Last updated:** 2026-08-01
 
 Goal: a mobile app where a user picks their vehicle, enters or picks a tire
@@ -495,40 +495,53 @@ wheel* — at which point the image-normalisation work described previously stil
 applies in full, and should still be treated as its own workstream with manual
 QA rather than an afternoon of scripting.
 
-### Phase 5 — Photo capture, calibration & profile compositor (3–4 weeks) — *the v1 payoff*
+### Phase 5 — Photo capture, calibration & profile compositor — **DONE**
 
-**Unblocked. Nothing external is required to start this.**
+Pick a vehicle → calibrate one square-on photo → try sizes and see them on your
+own car.
 
-**5a. Tire size input (§6)**
-- Manual entry, parsed by the Phase 3 engine, which already accepts metric and
-  flotation and warns rather than blocks.
-- **Placard OCR** as the fast path: photograph the driver's B-pillar sticker,
-  read the factory size off it. Federally mandated to exist, so this works on
-  every US vehicle under 10,000lb GVWR (§6a).
-- Ask for the size **currently fitted**, defaulting to the placard value. On a
-  modified car these differ, and the fitted one is what calibration needs.
+**Calibration is two taps, not a drag.** Centre of the wheel, then the outer
+edge of the tire; radius is the distance between them. No gesture library,
+identical on native and `react-native-web`, and more precise than dragging a
+handle on a phone-sized image. The tire's outer diameter follows exactly from
+the fitted size, so the scale carries no modelling error — which is why that
+reference was chosen over the rim lip.
 
-**5b. Capture & calibration (§4b)**
-- Camera flow guiding a **square-on side shot** — a far easier instruction to
-  follow than the corner angle earlier revisions specified (§4a).
-- Circle-fit gesture on one wheel → scale and anchor.
-- Photos and calibration stored on the vehicle record; captured once, reused.
-- Quality guardrails: reject too-dark or too-blurry.
-- Photos persist to local storage only (decision 9). Strip EXIF and offer plate
-  blur at the share boundary, not at ingest.
+**It asks for the size fitted right now, not the factory size.** The placard is
+collected separately as the factory reference. On a modified car these differ,
+and calibration must use what is actually in the photo (§4b).
 
-**5c. Profile compositor**
-- Mask the original wheel; crop it, re-scale to the new rim diameter, and
-  regenerate the tire as an annulus at the new sidewall height (§4a).
-- No perspective warp — square-on, a wheel is a circle.
-- Side-by-side or slider against the current setup, since the entire point is
-  comparison.
-- Numeric readout from the Phase 3 engine alongside the render: diameter delta,
-  speedometer error, and any warnings.
-- **Export/share as an image** via the OS share sheet. The growth loop.
+**The composite needs no catalog and no native image manipulation.** The user's
+own wheel is clipped out of their photo by a rounded `overflow: hidden`
+container and rescaled to the new rim diameter, with a sidewall drawn around it
+as a border whose thickness *is* the sidewall height at that scale. Square-on
+means a wheel is a circle, so it is scale and position throughout. A disc
+covering whichever tire is larger prevents a smaller proposed size leaving a
+ring of the original visible.
 
-*Deferred:* automatic wheel detection, multi-angle capture, offset rendering,
-wheel catalog imagery.
+**Numbers accompany the picture**, straight from the Phase 3 engine: diameter
+delta, sidewall delta, speedometer error, and warnings. Offset is computed but
+not drawn.
+
+**Data safety.** `VehicleRecord.wheels` is optional with **no default backfilled
+in migrate()**, so a record that has never opened the tab stays byte-identical
+to one saved before the feature existed. Five upgrade-safety tests assert this,
+including that migration never invents the field.
+
+**Verified:** tsc clean, 165 tests (49 new), web bundle builds.
+
+**Not verified — and this is now the main risk.** Nothing here has run on a
+device or against a real photograph. Three things need a real phone:
+
+1. **Does the composite look right?** The lighting-match risk (§4b) is untested,
+   and it is still the largest quality risk in the plan.
+2. **Is the two-tap calibration accurate enough in practice?** A few pixels of
+   error at the tire edge scales into the whole render.
+3. **Does the clipped-and-rescaled wheel hold up**, or does re-scaling the user's
+   own wheel read as obviously enlarged?
+
+*Deferred:* placard OCR (needs a dev build for ML Kit — manual entry ships
+first), automatic wheel detection, multi-angle capture, offset rendering.
 
 ### Phase 6 — Builds, sharing & commerce (1–2 weeks)
 
