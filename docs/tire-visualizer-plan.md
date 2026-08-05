@@ -570,6 +570,25 @@ a plus-one the patch is provably unnecessary. Layer recipe is pure tested math
 in `compositeLayersFor`. This also materially de-risks the lighting-match
 question: the rubber now carries the photo's own lighting.
 
+**Addendum 3 — durable photo storage (production-readiness, user-reported).**
+The web picker returns a blob: URL that dies on reload (mobile browsers reload
+constantly → "the image disappears"); native returns an OS-purgeable cache URI —
+same bug, different coat. Photos now go through `core/photoStore`: IndexedDB on
+web (idb: key resolved to an object URL per session), document-directory copy on
+native (stable file:// path). Old data:/file:/https: URIs pass through, so
+existing records keep working.
+
+This also protects the data guarantee: photo bytes never enter AppData, because
+one multi-MB record would breach localStorage's ~5MB cap and make **every**
+subsequent save fail — silently taking maintenance edits with it. Records carry
+a short reference only, pinned by an upgrade-safety test.
+
+Web photos are downscaled at ingest (1600px long edge) — full-resolution phone
+photos rendered 4× over at up to 3× scale blank out on mobile browsers. Touch
+taps fixed alongside (pageX via changedTouches). A second E2E walkthrough now
+runs under iPhone touch emulation, including tab-away and full-reload
+persistence checks.
+
 *Deferred:* placard OCR (needs a dev build for ML Kit — manual entry ships
 first), automatic wheel detection, multi-angle capture, offset rendering.
 
