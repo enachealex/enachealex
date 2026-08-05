@@ -540,6 +540,25 @@ device or against a real photograph. Three things need a real phone:
 3. **Does the clipped-and-rescaled wheel hold up**, or does re-scaling the user's
    own wheel read as obviously enlarged?
 
+**Addendum — size adjustment & calibration precision (post-review):**
+- **Steppers** on the size field: Width/Sidewall/Wheel in the increments the
+  industry sells (10mm / 5 / 1"), clamped to plausible ranges. Empty field +
+  one tap steps from the fitted size. Stepped sizes drop the base's load/speed
+  markings rather than claiming unchecked ratings.
+- **Calibration loupe + nudge**: a 3× magnifier on the active point with 2px
+  arrow nudges and a centre/edge toggle — fingertip accuracy was the cap on
+  calibration quality.
+- **Web tap fix**: react-native-web leaves `locationX` undefined for mouse
+  events, so every web tap was silently NaN. Taps now use pageX/pageY minus the
+  frame's measured window offset (both platforms).
+- **Vehicle-switch fix**: the working size resets on vehicle change instead of
+  leaking to the next car.
+- **Verified end-to-end in a real browser** (Playwright over the exported
+  bundle): file chooser → two taps → loupe/nudge → save → 'Calibrated against'
+  → stepper → preview. The web-tap and vehicle-switch bugs were both found by
+  this pass, not by unit tests — the E2E walkthrough is now part of the
+  verification story. Live demo published as an artifact.
+
 *Deferred:* placard OCR (needs a dev build for ML Kit — manual entry ships
 first), automatic wheel detection, multi-angle capture, offset rendering.
 
