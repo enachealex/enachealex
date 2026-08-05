@@ -559,6 +559,17 @@ device or against a real photograph. Three things need a real phone:
   this pass, not by unit tests — the E2E walkthrough is now part of the
   verification story. Live demo published as an artifact.
 
+**Addendum 2 — the tire is real now too.** The proposed tire is no longer a
+synthetic dark ring: both wheel AND tire are clipped from the user's photo and
+rescaled independently. The tire scales so its outer edge lands at the new OD;
+the wheel draws over the middle, so a thinner sidewall emerges from the bigger
+wheel covering more rubber — which is what plus-sizing physically does. The one
+case that trick can't cover (taller sidewall exposing scaled rim-lip pixels) is
+patched with flat rubber tone at the rim, where real sidewalls are darkest; on
+a plus-one the patch is provably unnecessary. Layer recipe is pure tested math
+in `compositeLayersFor`. This also materially de-risks the lighting-match
+question: the rubber now carries the photo's own lighting.
+
 *Deferred:* placard OCR (needs a dev build for ML Kit — manual entry ships
 first), automatic wheel detection, multi-angle capture, offset rendering.
 
