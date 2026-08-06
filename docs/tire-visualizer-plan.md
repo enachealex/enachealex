@@ -1,6 +1,6 @@
 # Tire & Wheel Visualizer — Implementation Plan
 
-**Status:** Phases 1, 3, 5 and 6 complete. Phase 7 (hardening & launch) next. **Nothing has been run on a real device yet** — that is the outstanding gap.
+**Status:** All engineering phases complete (1, 3, 5, 6, 7). What remains before release is the human launch checklist below — headed by one pass on a physical phone.
 **Last updated:** 2026-08-01
 
 Goal: a mobile app where a user picks their vehicle, enters or picks a tire
@@ -627,10 +627,36 @@ error band the loupe+nudge exists to shrink).
 *Deferred from this phase:* side-by-side comparison of two builds,
 license-plate blur, in-app tire brand catalog (O12 decides the affiliate tag).
 
-### Phase 7 — Hardening & launch (2–3 weeks)
-Accessibility, offline behavior, analytics on the fitment funnel, crash
-reporting, store assets and review, and legal — fitment guidance is advisory,
-**not a safety guarantee**, and must say so.
+### Phase 7 — Hardening & launch — **engineering DONE; human checklist remains**
+
+Shipped:
+- **iOS permission strings** for camera and photo library via the
+  expo-image-picker config plugin. Without them, App Store review rejects the
+  build the moment it opens the picker. Copy states the privacy position:
+  *photos never leave your device*.
+- **Error isolation:** `FeatureBoundary` wraps the Wheels tab — a crash in the
+  new feature shows an in-tab message with a reset instead of white-screening
+  the app whose maintenance data people rely on. Nothing is reported anywhere.
+- **Accessibility:** real button roles and disabled states on the shared
+  Button, roles/labels on suggestion chips and saved-build cards, a screen-reader
+  description of the two-tap calibration frame.
+- **Advisory disclaimer** under the comparison, per the plan's legal note: size
+  guidance is advisory, not a guarantee of fitment or safety.
+- **No analytics, no crash reporting — deliberately.** Either would contradict
+  decision 9. The privacy stance is a feature; say so in the store listing.
+- **Offline:** the Wheels tab is fully offline by construction (no network
+  calls exist in the feature). Vehicle *setup* still needs vPIC, unchanged.
+
+**Launch checklist — human hands required:**
+1. **One pass on a physical phone** (the standing gap): camera capture, photo
+   permission prompts, calibration by finger, share sheet, backup import via
+   the document picker, and IndexedDB persistence in the installed PWA.
+2. Decide **O8 (app rename)** before the store listing is written.
+3. `eas build` for iOS/Android; TestFlight / internal testing round.
+4. Store listing: screenshots (the walkthrough set is a starting point),
+   description leading with "your photos never leave your phone", category,
+   privacy questionnaire (answers are easy: no data collected).
+5. Optional: affiliate program signup (O12) — one-line change to enable.
 
 ### Fast-follows (post-v1, in likely priority order)
 1. **Automatic wheel detection** — pre-positions the calibration ellipse. Pure
