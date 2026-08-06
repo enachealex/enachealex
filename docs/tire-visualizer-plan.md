@@ -1,6 +1,6 @@
 # Tire & Wheel Visualizer — Implementation Plan
 
-**Status:** Phases 1, 3 and 5 complete. Phase 6 next. **Nothing has been run on a real device yet** — that is the outstanding gap.
+**Status:** Phases 1, 3, 5 and 6 complete. Phase 7 (hardening & launch) next. **Nothing has been run on a real device yet** — that is the outstanding gap.
 **Last updated:** 2026-08-01
 
 Goal: a mobile app where a user picks their vehicle, enters or picks a tire
@@ -592,22 +592,40 @@ persistence checks.
 *Deferred:* placard OCR (needs a dev build for ML Kit — manual entry ships
 first), automatic wheel detection, multi-angle capture, offset rendering.
 
-### Phase 6 — Builds, sharing & commerce (1–2 weeks)
+### Phase 6 — Builds, sharing & commerce — **DONE**
 
-Roughly halved by decision 9 — no auth, no D1, no object storage, no share-link
-hosting, no moderation.
+- **Saved builds** in local storage on the vehicle record: save the working
+  size, tap to reload it, remove it. A few hundred bytes each — they ride the
+  existing persistence, backup, and upgrade-safety guarantees unchanged.
+- **Share via the OS share sheet.** Web: a canvas redraws the unit-tested layer
+  recipe at full photo resolution with a size-callout footer; canvas
+  re-encoding strips EXIF (GPS included) by construction, so the
+  scrub-at-the-share-boundary requirement comes free. Download fallback where
+  the Web Share API is absent. Native: view-shot capture → expo-sharing.
+  Nothing is uploaded by us — decision 9 holds.
+- **Shop links** (Tire Rack, Discount Tire): outbound size-searches from a pure
+  tested helper. Link carries only the size. Affiliate tag slot exists, empty
+  until a program is set up (O12).
+- **Maintenance write-back:** "Track rotations" on a build adds a 5,000-mile
+  custom rotation item through the existing customItems machinery — the
+  shared-garage payoff, visible in the Maintenance tab.
+- **Native backup import** via expo-document-picker, closing the gap where
+  phone users could export but never restore. Import confirm uses Alert on
+  native (window.confirm is web-only).
 
-- Save/name/revisit builds **in local storage**, alongside the existing garage.
-- Side-by-side comparison of two builds.
-- **Share via the OS share sheet** — composite rendered on-device, handed to the
-  system as an image. EXIF strip and optional plate blur on the way out.
-- **Affiliate buy links** (Tire Rack, Discount Tire, Fitment Industries).
-  Outbound URLs with your affiliate ID; attribution is retailer-side.
-- **Extend `backup.ts` to cover builds and calibration.** With no cloud sync this
-  is the only device-migration path, so it is a real feature now — including
-  making import work on native, which today is web-only for lack of a file picker.
-- **Write-back to the Maintenance tab:** a purchased wheel/tire set becomes a
-  tracked item with mileage — the payoff of the shared garage (decision 8).
+**E2E-verified:** save → share (downloaded JPEG inspected) → track-rotations
+appearing in the Maintenance dashboard → builds surviving full reload, on both
+desktop and iPhone-emulated touch runs.
+
+**A test artifact worth remembering:** stale bounding-box taps in the
+walkthrough landed the second calibration tap ~20px high after the step card's
+text reflowed, silently doubling the traced scale. The app measured the real
+tap faithfully — the bug was in the script. Scripts now re-measure before
+every tap, and scripted calibration verifies within ~4% of ground truth (the
+error band the loupe+nudge exists to shrink).
+
+*Deferred from this phase:* side-by-side comparison of two builds,
+license-plate blur, in-app tire brand catalog (O12 decides the affiliate tag).
 
 ### Phase 7 — Hardening & launch (2–3 weeks)
 Accessibility, offline behavior, analytics on the fitment funnel, crash
