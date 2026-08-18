@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- zombie head -->
+    <path
+        android:fillColor="#66BB6A"
+        android:pathData="M30,54 a24,24 0 1,0 48,0 a24,24 0 1,0 -48,0 z" />
+    <!-- left eye -->
+    <path
+        android:fillColor="#B71C1C"
+        android:pathData="M41,48 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 z" />
+    <!-- right eye -->
+    <path
+        android:fillColor="#B71C1C"
+        android:pathData="M58,48 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 z" />
+    <!-- mouth -->
+    <path
+        android:fillColor="#1B2A1B"
+        android:pathData="M43,62 h22 v4 h-22 z" />
+    <!-- stitches -->
+    <path
+        android:fillColor="#1B2A1B"
+        android:pathData="M47,59 h2 v10 h-2 z M53,59 h2 v10 h-2 z M59,59 h2 v10 h-2 z" />
+</vector>
