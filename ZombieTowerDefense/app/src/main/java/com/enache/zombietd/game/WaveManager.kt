@@ -2,6 +2,10 @@ package com.enache.zombietd.game
 
 import kotlin.math.max
 
+/**
+ * Waves scale by quantity, not health: every zombie has the same HP all game,
+ * later waves just send a lot more of them, faster.
+ */
 class WaveManager {
     var wave = 0
         private set
@@ -21,15 +25,15 @@ class WaveManager {
 
     fun startNextWave() {
         wave++
-        interval = max(0.35f, 0.95f - wave * 0.025f)
+        interval = max(0.30f, 0.9f - wave * 0.03f)
 
         val list = mutableListOf<ZombieType>()
-        repeat(6 + wave * 2) { list.add(ZombieType.WALKER) }
-        if (wave >= 3) repeat(wave) { list.add(ZombieType.RUNNER) }
+        repeat(6 + wave * 3) { list.add(ZombieType.WALKER) }
+        if (wave >= 3) repeat((wave - 2) * 2) { list.add(ZombieType.RUNNER) }
         list.shuffle()
 
         if (wave >= 5) {
-            val brutes = (wave - 3) / 2
+            val brutes = wave - 4
             repeat(brutes) { i ->
                 val index = ((i + 1) * list.size / (brutes + 1)).coerceAtMost(list.size)
                 list.add(index, ZombieType.BRUTE)
@@ -50,7 +54,4 @@ class WaveManager {
             spawnTimer = interval * if (type == ZombieType.BOSS || queue.firstOrNull() == ZombieType.BOSS) 2.5f else 1f
         }
     }
-
-    /** Zombie health multiplier: waves get tougher quadratically. */
-    fun hpMul(): Float = 1f + (wave - 1) * 0.22f + (wave - 1) * (wave - 1) * 0.012f
 }

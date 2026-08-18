@@ -14,18 +14,19 @@ enum class ZombieType(
     val radius: Float,
     val livesCost: Int     // lives lost if it reaches the exit
 ) {
-    WALKER("Walker", 90f, 95f, 12, 34f, 1),
-    RUNNER("Runner", 55f, 175f, 10, 27f, 1),
-    BRUTE("Brute", 420f, 55f, 35, 46f, 2),
-    BOSS("Abomination", 2600f, 48f, 200, 60f, 5)
+    WALKER("Walker", 70f, 95f, 10, 34f, 1),
+    RUNNER("Runner", 45f, 175f, 8, 27f, 1),
+    BRUTE("Brute", 340f, 55f, 30, 46f, 2),
+    BOSS("Abomination", 2000f, 48f, 150, 60f, 5)
 }
 
-class Zombie(val type: ZombieType, hpMul: Float) {
-    val maxHp = type.baseHp * hpMul
+/** Health is constant across the whole game — later waves send more zombies, not tougher ones. */
+class Zombie(val type: ZombieType, private val path: List<PointF>) {
+    val maxHp = type.baseHp
     var hp = maxHp
     var rewarded = false
 
-    val pos = PointF(GameMap.waypoints[0].x, GameMap.waypoints[0].y)
+    val pos = PointF(path[0].x, path[0].y)
     private var wpIndex = 1
     var dirX = 1f
         private set
@@ -66,8 +67,8 @@ class Zombie(val type: ZombieType, hpMul: Float) {
         wobble += dt * 9f
 
         var remaining = type.speed * (if (isSlowed) slowFactor else 1f) * dt
-        while (remaining > 0f && wpIndex < GameMap.waypoints.size) {
-            val target = GameMap.waypoints[wpIndex]
+        while (remaining > 0f && wpIndex < path.size) {
+            val target = path[wpIndex]
             val dx = target.x - pos.x
             val dy = target.y - pos.y
             val dist = hypot(dx, dy)
@@ -87,13 +88,13 @@ class Zombie(val type: ZombieType, hpMul: Float) {
                 remaining = 0f
             }
         }
-        if (wpIndex >= GameMap.waypoints.size) reachedEnd = true
+        if (wpIndex >= path.size) reachedEnd = true
     }
 
     /** Higher value = further along the path. Used so towers shoot the front-most zombie. */
     fun progress(): Float {
-        if (wpIndex >= GameMap.waypoints.size) return Float.MAX_VALUE
-        val t = GameMap.waypoints[wpIndex]
+        if (wpIndex >= path.size) return Float.MAX_VALUE
+        val t = path[wpIndex]
         return wpIndex - hypot(t.x - pos.x, t.y - pos.y) / 1000f
     }
 }
