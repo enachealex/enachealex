@@ -25,28 +25,27 @@ then keep going in endless mode if you dare.
 | The Fork       | Hard       | The path splits into two lanes; zombies pick one at random |
 | Death Spiral   | Easy       | A very long spiral — lots of time to whittle them down |
 
-### Towers
+### Soldier classes
 
-| Tower  | Cost | Specialty                                  |
-|--------|------|--------------------------------------------|
-| Rifle  | $100 | Fast, reliable all-rounder                 |
-| Frost  | $150 | Slows zombies in their tracks              |
-| Flame  | $200 | Sets zombies on fire (damage over time)    |
-| Mortar | $220 | Long-range splash damage                   |
-| Sniper | $250 | Huge damage at very long range             |
-| Tesla  | $300 | Chain lightning arcs between zombies       |
+Towers are soldiers, drawn top-down with class-specific gear. More classes are
+planned.
+
+| Class    | Cost | Specialty                                        |
+|----------|------|--------------------------------------------------|
+| Assault  | $100 | Fast, reliable carbine fire                      |
+| Support  | $180 | LMG stream that suppresses (slows) zombies       |
+| Engineer | $220 | Long-range launcher with splash damage           |
+| Recon    | $250 | Ghillie sniper: huge damage at very long range   |
 
 ### Upgrades
 
-There are no generic tower levels — every tower has its **own three upgrade tracks**,
+There are no generic tower levels — every class has its **own three upgrade tracks**,
 each purchasable rank by rank (costs rise with each rank):
 
-- **Rifle** — Rapid Fire (fire rate), Hollow Points (damage), Long Barrel (range)
-- **Frost** — Deep Freeze (stronger slow), Permafrost (longer slow), Shatter (damage)
-- **Flame** — Napalm (burn damage/s), Pressure Tank (range), White Heat (damage)
-- **Mortar** — Big Shells (damage), Shockwave (blast radius), Auto Loader (fire rate)
-- **Sniper** — Deadeye (critical hits, 2.5x), Heavy Rounds (damage), Piercing Shot (shots pass through enemies)
-- **Tesla** — Superconductor (more chain targets), High Voltage (damage), Overcharge (fire rate)
+- **Assault** — Rapid Fire (fire rate), Hollow Points (damage), Long Barrel (range)
+- **Support** — Ammo Belt (fire rate), AP Rounds (damage), Suppressing Fire (stronger slow)
+- **Engineer** — Big Payload (damage), Frag Radius (blast radius), Auto Loader (fire rate)
+- **Recon** — Deadeye (critical hits, 2.5x), Heavy Rounds (damage), Piercing Shot (shots pass through enemies)
 
 Selling a tower refunds 70% of everything invested, upgrades included.
 

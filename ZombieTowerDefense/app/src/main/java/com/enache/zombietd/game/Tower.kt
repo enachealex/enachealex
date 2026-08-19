@@ -8,7 +8,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-enum class UpgradeEffect { DAMAGE, FIRE_RATE, RANGE, CRIT, PIERCE, SLOW_POWER, SLOW_DURATION, BURN_DPS, SPLASH, CHAIN }
+enum class UpgradeEffect { DAMAGE, FIRE_RATE, RANGE, CRIT, PIERCE, SLOW_POWER, SLOW_DURATION, BURN_DPS, SPLASH }
 
 class UpgradeDef(
     val name: String,
@@ -19,6 +19,10 @@ class UpgradeDef(
     val perRank: Float
 )
 
+/**
+ * Soldier classes. Each class has its own three upgrade tracks; more classes
+ * can be added as new enum entries without touching the combat code.
+ */
 enum class TowerType(
     val label: String,
     val blurb: String,
@@ -32,59 +36,40 @@ enum class TowerType(
     val slowBaseDuration: Float = 0f,
     val baseBurnDps: Float = 0f,
     val baseSplash: Float = 0f,       // splash radius in px
-    val baseChain: Int = 0,           // targets hit per tesla zap
     val upgrades: List<UpgradeDef>
 ) {
-    RIFLE(
-        "Rifle", "Fast", 100, 270f, 20f, 2.4f, 1100f, 0xFFFBC02D.toInt(),
+    ASSAULT(
+        "Assault", "Fast rifle", 100, 270f, 20f, 2.4f, 1100f, 0xFFFBC02D.toInt(),
         upgrades = listOf(
             UpgradeDef("Rapid Fire", "+20% fire rate", 3, 70, UpgradeEffect.FIRE_RATE, 0.20f),
             UpgradeDef("Hollow Points", "+30% damage", 3, 80, UpgradeEffect.DAMAGE, 0.30f),
             UpgradeDef("Long Barrel", "+15% range", 3, 60, UpgradeEffect.RANGE, 0.15f)
         )
     ),
-    FROST(
-        "Frost", "Slows", 150, 230f, 8f, 1.1f, 900f, 0xFF4FC3F7.toInt(),
-        baseSlowFactor = 0.60f, slowBaseDuration = 2f,
+    SUPPORT(
+        "Support", "Suppresses", 180, 240f, 9f, 5.0f, 1000f, 0xFF4FC3F7.toInt(),
+        baseSlowFactor = 0.85f, slowBaseDuration = 1.2f,
         upgrades = listOf(
-            UpgradeDef("Deep Freeze", "Stronger slow", 3, 90, UpgradeEffect.SLOW_POWER, 0.10f),
-            UpgradeDef("Permafrost", "+0.8s slow duration", 3, 70, UpgradeEffect.SLOW_DURATION, 0.8f),
-            UpgradeDef("Shatter", "+40% damage", 3, 80, UpgradeEffect.DAMAGE, 0.40f)
+            UpgradeDef("Ammo Belt", "+20% fire rate", 3, 90, UpgradeEffect.FIRE_RATE, 0.20f),
+            UpgradeDef("AP Rounds", "+30% damage", 3, 100, UpgradeEffect.DAMAGE, 0.30f),
+            UpgradeDef("Suppressing Fire", "Stronger slow", 3, 110, UpgradeEffect.SLOW_POWER, 0.10f)
         )
     ),
-    FLAME(
-        "Flame", "Burns", 200, 190f, 6f, 7f, 850f, 0xFFFF7043.toInt(),
-        baseBurnDps = 10f,
-        upgrades = listOf(
-            UpgradeDef("Napalm", "+8 burn damage/s", 3, 100, UpgradeEffect.BURN_DPS, 8f),
-            UpgradeDef("Pressure Tank", "+15% range", 3, 80, UpgradeEffect.RANGE, 0.15f),
-            UpgradeDef("White Heat", "+35% damage", 3, 90, UpgradeEffect.DAMAGE, 0.35f)
-        )
-    ),
-    MORTAR(
-        "Mortar", "Splash", 220, 400f, 40f, 0.45f, 550f, 0xFF8D6E63.toInt(),
+    ENGINEER(
+        "Engineer", "Splash", 220, 400f, 40f, 0.45f, 550f, 0xFFFF7043.toInt(),
         baseSplash = 110f,
         upgrades = listOf(
-            UpgradeDef("Big Shells", "+35% damage", 3, 120, UpgradeEffect.DAMAGE, 0.35f),
-            UpgradeDef("Shockwave", "+30px blast radius", 3, 100, UpgradeEffect.SPLASH, 30f),
+            UpgradeDef("Big Payload", "+35% damage", 3, 120, UpgradeEffect.DAMAGE, 0.35f),
+            UpgradeDef("Frag Radius", "+30px blast radius", 3, 100, UpgradeEffect.SPLASH, 30f),
             UpgradeDef("Auto Loader", "+20% fire rate", 3, 110, UpgradeEffect.FIRE_RATE, 0.20f)
         )
     ),
-    SNIPER(
-        "Sniper", "Long range", 250, 540f, 85f, 0.55f, 1700f, 0xFF90A4AE.toInt(),
+    RECON(
+        "Recon", "Long range", 250, 540f, 85f, 0.55f, 1700f, 0xFF90A4AE.toInt(),
         upgrades = listOf(
             UpgradeDef("Deadeye", "+15% crit chance (2.5x)", 3, 110, UpgradeEffect.CRIT, 0.15f),
             UpgradeDef("Heavy Rounds", "+35% damage", 3, 120, UpgradeEffect.DAMAGE, 0.35f),
             UpgradeDef("Piercing Shot", "Shots pierce +1 enemy", 2, 150, UpgradeEffect.PIERCE, 1f)
-        )
-    ),
-    TESLA(
-        "Tesla", "Chains", 300, 260f, 18f, 1.6f, 0f, 0xFF9575CD.toInt(),
-        baseChain = 2,
-        upgrades = listOf(
-            UpgradeDef("Superconductor", "+1 chain target", 3, 130, UpgradeEffect.CHAIN, 1f),
-            UpgradeDef("High Voltage", "+30% damage", 3, 110, UpgradeEffect.DAMAGE, 0.30f),
-            UpgradeDef("Overcharge", "+20% fire rate", 3, 100, UpgradeEffect.FIRE_RATE, 0.20f)
         )
     )
 }
@@ -92,8 +77,6 @@ enum class TowerType(
 class Tower(val type: TowerType, val col: Int, val row: Int) {
     companion object {
         const val CRIT_MULTIPLIER = 2.5f
-        const val CHAIN_RANGE = 240f
-        const val CHAIN_FALLOFF = 0.8f
     }
 
     val pos: PointF = GameMap.cellCenter(col, row)
@@ -123,7 +106,6 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     val slowDuration get() = type.slowBaseDuration + bonus(UpgradeEffect.SLOW_DURATION)
     val burnDps get() = type.baseBurnDps + bonus(UpgradeEffect.BURN_DPS)
     val splash get() = if (type.baseSplash > 0f) type.baseSplash + bonus(UpgradeEffect.SPLASH) else 0f
-    val chain get() = type.baseChain + bonus(UpgradeEffect.CHAIN).roundToInt()
     val sellValue get() = (invested * 0.7f).roundToInt()
 
     fun upgradeCost(i: Int) = type.upgrades[i].baseCost * (ranks[i] + 1)
@@ -134,12 +116,7 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         ranks[i]++
     }
 
-    fun update(
-        dt: Float,
-        zombies: List<Zombie>,
-        projectiles: MutableList<Projectile>,
-        onZap: (List<Zombie>, Float) -> Unit
-    ) {
+    fun update(dt: Float, zombies: List<Zombie>, projectiles: MutableList<Projectile>) {
         cooldown -= dt
 
         var best: Zombie? = null
@@ -162,41 +139,20 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         if (cooldown > 0f) return
         cooldown = 1f / fireRate
 
-        if (type == TowerType.TESLA) {
-            val chainTargets = mutableListOf(target)
-            var last = target
-            while (chainTargets.size < chain) {
-                var next: Zombie? = null
-                var bestD = CHAIN_RANGE
-                for (z in zombies) {
-                    if (!z.alive || z in chainTargets) continue
-                    val d = hypot(z.pos.x - last.pos.x, z.pos.y - last.pos.y)
-                    if (d < bestD) {
-                        bestD = d
-                        next = z
-                    }
-                }
-                next ?: break
-                chainTargets.add(next)
-                last = next
-            }
-            onZap(chainTargets, damage)
-        } else {
-            val isCrit = critChance > 0f && Random.nextFloat() < critChance
-            val dmg = if (isCrit) damage * CRIT_MULTIPLIER else damage
-            val muzzleX = pos.x + cos(angle) * 34f
-            val muzzleY = pos.y + sin(angle) * 34f
-            projectiles.add(
-                Projectile(
-                    muzzleX, muzzleY, target, type.projectileSpeed, dmg, type,
-                    isCrit = isCrit,
-                    pierceLeft = pierce,
-                    slowFactor = slowFactor,
-                    slowDuration = slowDuration,
-                    burnDps = burnDps,
-                    splash = splash
-                )
+        val isCrit = critChance > 0f && Random.nextFloat() < critChance
+        val dmg = if (isCrit) damage * CRIT_MULTIPLIER else damage
+        val muzzleX = pos.x + cos(angle) * 34f
+        val muzzleY = pos.y + sin(angle) * 34f
+        projectiles.add(
+            Projectile(
+                muzzleX, muzzleY, target, type.projectileSpeed, dmg, type,
+                isCrit = isCrit,
+                pierceLeft = pierce,
+                slowFactor = slowFactor,
+                slowDuration = slowDuration,
+                burnDps = burnDps,
+                splash = splash
             )
-        }
+        )
     }
 }

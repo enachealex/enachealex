@@ -59,9 +59,9 @@ class Game {
     private val sellRect = RectF(760f, 1165f, 1040f, 1245f)
 
     private fun buildCardRect(i: Int): RectF {
-        val col = i % 3
-        val row = i / 3
-        return RectF(30f + col * 350f, 1330f + row * 290f, 30f + col * 350f + 330f, 1330f + row * 290f + 260f)
+        val col = i % 2
+        val row = i / 2
+        return RectF(30f + col * 520f, 1330f + row * 290f, 30f + col * 520f + 500f, 1330f + row * 290f + 260f)
     }
 
     private fun upgradeRowY(i: Int) = 1350f + i * 180f
@@ -104,20 +104,7 @@ class Game {
 
         for (z in zombies) z.update(dt)
 
-        for (t in towers) {
-            t.update(dt, zombies, projectiles) { targets, dmg ->
-                var sx = t.pos.x
-                var sy = t.pos.y
-                var d = dmg
-                for (z in targets) {
-                    effects.add(Effect.bolt(sx, sy, z.pos.x, z.pos.y))
-                    z.hp -= d
-                    sx = z.pos.x
-                    sy = z.pos.y
-                    d *= Tower.CHAIN_FALLOFF
-                }
-            }
-        }
+        for (t in towers) t.update(dt, zombies, projectiles)
 
         val pIt = projectiles.iterator()
         while (pIt.hasNext()) {
@@ -580,63 +567,95 @@ class Game {
         canvas.drawRoundRect(-40f, 2f, -27f, 20f, 5f, 5f, fillPaint)
         canvas.drawRoundRect(27f, 2f, 40f, 20f, 5f, 5f, fillPaint)
 
-        // weapon (forward = -y), styled per tower type
+        // weapon (forward = -y), styled per class
         when (type) {
-            TowerType.RIFLE -> {
+            TowerType.ASSAULT -> {
+                // carbine with magazine
                 fillPaint.color = 0xFF263238.toInt()
                 canvas.drawRoundRect(9f, -58f, 18f, -14f, 4f, 4f, fillPaint)
+                canvas.drawRoundRect(4f, -34f, 10f, -22f, 3f, 3f, fillPaint)
                 fillPaint.color = type.color
                 canvas.drawRect(9f, -58f, 18f, -50f, fillPaint)
             }
-            TowerType.SNIPER -> {
+            TowerType.SUPPORT -> {
+                // LMG: thick barrel with an ammo box on the side
                 fillPaint.color = 0xFF263238.toInt()
-                canvas.drawRoundRect(10f, -76f, 17f, -14f, 3f, 3f, fillPaint)
+                canvas.drawRoundRect(8f, -56f, 22f, -12f, 4f, 4f, fillPaint)
+                fillPaint.color = 0xFF4A5433.toInt()
+                canvas.drawRoundRect(22f, -32f, 36f, -14f, 4f, 4f, fillPaint)
                 fillPaint.color = type.color
-                canvas.drawRect(10f, -76f, 17f, -68f, fillPaint)
+                canvas.drawRect(8f, -56f, 22f, -48f, fillPaint)
             }
-            TowerType.FROST -> {
-                fillPaint.color = 0xFF263238.toInt()
-                canvas.drawRoundRect(7f, -46f, 21f, -14f, 5f, 5f, fillPaint)
+            TowerType.ENGINEER -> {
+                // launcher tube with a warhead tip, plus a hovering drone
+                fillPaint.color = 0xFF37474F.toInt()
+                canvas.drawRoundRect(5f, -52f, 25f, -12f, 6f, 6f, fillPaint)
                 fillPaint.color = type.color
-                canvas.drawCircle(14f, -48f, 9f, fillPaint)
+                canvas.drawRoundRect(5f, -52f, 25f, -42f, 6f, 6f, fillPaint)
+                fillPaint.color = 0xFF546E7A.toInt()
+                canvas.drawCircle(-36f, -26f, 7f, fillPaint)
+                fillPaint.color = 0xFF90A4AE.toInt()
+                for (dx in intArrayOf(-1, 1)) for (dy in intArrayOf(-1, 1)) {
+                    canvas.drawCircle(-36f + dx * 9f, -26f + dy * 9f, 3f, fillPaint)
+                }
             }
-            TowerType.FLAME -> {
+            TowerType.RECON -> {
+                // long suppressed sniper rifle with scope
                 fillPaint.color = 0xFF263238.toInt()
-                canvas.drawRoundRect(6f, -42f, 22f, -14f, 5f, 5f, fillPaint)
+                canvas.drawRoundRect(11f, -70f, 16f, -14f, 3f, 3f, fillPaint)
+                canvas.drawRoundRect(9f, -84f, 18f, -70f, 4f, 4f, fillPaint)
+                fillPaint.color = 0xFF37474F.toInt()
+                canvas.drawCircle(13.5f, -36f, 6f, fillPaint)
                 fillPaint.color = type.color
-                canvas.drawCircle(-10f, 26f, 9f, fillPaint) // fuel tanks on the pack
-                canvas.drawCircle(10f, 26f, 9f, fillPaint)
-            }
-            TowerType.MORTAR -> {
-                fillPaint.color = 0xFF263238.toInt()
-                canvas.drawCircle(0f, -30f, 15f, fillPaint)
-                fillPaint.color = type.color
-                canvas.drawCircle(0f, -30f, 8f, fillPaint)
-            }
-            TowerType.TESLA -> {
-                fillPaint.color = 0xFF263238.toInt()
-                canvas.drawRect(-3f, -38f, 3f, -14f, fillPaint)
-                fillPaint.color = type.color
-                canvas.drawCircle(-12f, -36f, 6f, fillPaint)
-                canvas.drawCircle(12f, -36f, 6f, fillPaint)
+                canvas.drawCircle(13.5f, -36f, 3f, fillPaint)
             }
         }
 
-        // camo helmet on top
-        fillPaint.color = 0xFF77864C.toInt()
-        canvas.drawCircle(0f, 0f, 26f, fillPaint)
-        for (spot in camoSpots) {
-            fillPaint.color = if (spot[0] < 0f) 0xFF5A6B3A.toInt() else 0xFF6E5F3F.toInt()
-            canvas.drawCircle(spot[0] * 18f, spot[1] * 18f, spot[2] * 26f, fillPaint)
+        // headgear per class
+        when (type) {
+            TowerType.ENGINEER -> {
+                // field cap with a front brim
+                fillPaint.color = 0xFF6E7B4A.toInt()
+                canvas.drawCircle(0f, 0f, 24f, fillPaint)
+                canvas.drawRoundRect(-14f, -36f, 14f, -20f, 6f, 6f, fillPaint)
+                fillPaint.color = 0xFF5A6B3A.toInt()
+                canvas.drawCircle(-6f, 4f, 8f, fillPaint)
+                strokePaint.color = 0xFF3E4A2C.toInt()
+                strokePaint.strokeWidth = 4f
+                canvas.drawCircle(0f, 0f, 24f, strokePaint)
+            }
+            TowerType.RECON -> {
+                // shaggy ghillie hood
+                fillPaint.color = 0xFF55663B.toInt()
+                canvas.drawCircle(0f, 0f, 27f, fillPaint)
+                fillPaint.color = 0xFF66784A.toInt()
+                canvas.drawCircle(-9f, -6f, 16f, fillPaint)
+                canvas.drawCircle(10f, -2f, 14f, fillPaint)
+                canvas.drawCircle(0f, 10f, 15f, fillPaint)
+                fillPaint.color = 0xFF4A5A32.toInt()
+                canvas.drawCircle(6f, -12f, 9f, fillPaint)
+                canvas.drawCircle(-10f, 10f, 8f, fillPaint)
+                strokePaint.color = 0xFF3E4A2C.toInt()
+                strokePaint.strokeWidth = 4f
+                canvas.drawCircle(0f, 0f, 27f, strokePaint)
+            }
+            else -> {
+                // camo combat helmet with seams
+                fillPaint.color = 0xFF77864C.toInt()
+                canvas.drawCircle(0f, 0f, 26f, fillPaint)
+                for (spot in camoSpots) {
+                    fillPaint.color = if (spot[0] < 0f) 0xFF5A6B3A.toInt() else 0xFF6E5F3F.toInt()
+                    canvas.drawCircle(spot[0] * 18f, spot[1] * 18f, spot[2] * 26f, fillPaint)
+                }
+                strokePaint.color = 0x553E4A2C
+                strokePaint.strokeWidth = 3f
+                canvas.drawLine(-9f, -22f, -9f, 22f, strokePaint)
+                canvas.drawLine(9f, -22f, 9f, 22f, strokePaint)
+                strokePaint.color = 0xFF3E4A2C.toInt()
+                strokePaint.strokeWidth = 4f
+                canvas.drawCircle(0f, 0f, 26f, strokePaint)
+            }
         }
-        // helmet seams and rim
-        strokePaint.color = 0x553E4A2C
-        strokePaint.strokeWidth = 3f
-        canvas.drawLine(-9f, -22f, -9f, 22f, strokePaint)
-        canvas.drawLine(9f, -22f, 9f, 22f, strokePaint)
-        strokePaint.color = 0xFF3E4A2C.toInt()
-        strokePaint.strokeWidth = 4f
-        canvas.drawCircle(0f, 0f, 26f, strokePaint)
 
         canvas.restore()
     }
@@ -715,9 +734,9 @@ class Game {
         for (p in projectiles) {
             fillPaint.color = p.kind.color
             val radius = when (p.kind) {
-                TowerType.SNIPER -> 10f
-                TowerType.MORTAR -> 13f
-                TowerType.FLAME -> 7f
+                TowerType.RECON -> 10f
+                TowerType.ENGINEER -> 13f
+                TowerType.SUPPORT -> 6f
                 else -> 8f
             }
             canvas.drawCircle(p.x, p.y, radius, fillPaint)
@@ -864,7 +883,6 @@ class Game {
             if (tower.type.baseSlowFactor < 1f) append("   SLOW ${((1f - tower.slowFactor) * 100).roundToInt()}%")
             if (tower.burnDps > 0f) append("   BURN ${tower.burnDps.roundToInt()}/s")
             if (tower.splash > 0f) append("   BLAST ${tower.splash.roundToInt()}")
-            if (tower.type.baseChain > 0) append("   CHAIN ${tower.chain}")
         }
         canvas.drawText(stats, 40f, 1262f, textPaint)
 
