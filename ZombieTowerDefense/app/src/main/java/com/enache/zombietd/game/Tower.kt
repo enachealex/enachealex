@@ -10,18 +10,18 @@ import kotlin.random.Random
 
 enum class UpgradeEffect { DAMAGE, FIRE_RATE, RANGE, CRIT, PIERCE, SLOW_POWER, SLOW_DURATION, BURN_DPS, SPLASH }
 
-class UpgradeDef(
+/** One step in a class's ordered upgrade path. Tiers must be bought in order. */
+class UpgradeTier(
     val name: String,
     val desc: String,
-    val maxRank: Int,
-    val baseCost: Int,      // rank N costs baseCost * N
+    val cost: Int,
     val effect: UpgradeEffect,
-    val perRank: Float
+    val amount: Float
 )
 
 /**
- * Soldier classes. Each class has its own three upgrade tracks; more classes
- * can be added as new enum entries without touching the combat code.
+ * Soldier classes. Each class has its own ordered upgrade path (tier 1 first,
+ * then tier 2, ...); more classes and deeper paths can be added as data only.
  */
 enum class TowerType(
     val label: String,
@@ -36,40 +36,48 @@ enum class TowerType(
     val slowBaseDuration: Float = 0f,
     val baseBurnDps: Float = 0f,
     val baseSplash: Float = 0f,       // splash radius in px
-    val upgrades: List<UpgradeDef>
+    val path: List<UpgradeTier>
 ) {
     ASSAULT(
         "Assault", "Fast rifle", 100, 270f, 20f, 2.4f, 1100f, 0xFFFBC02D.toInt(),
-        upgrades = listOf(
-            UpgradeDef("Rapid Fire", "+20% fire rate", 3, 70, UpgradeEffect.FIRE_RATE, 0.20f),
-            UpgradeDef("Hollow Points", "+30% damage", 3, 80, UpgradeEffect.DAMAGE, 0.30f),
-            UpgradeDef("Long Barrel", "+15% range", 3, 60, UpgradeEffect.RANGE, 0.15f)
+        path = listOf(
+            UpgradeTier("Rapid Fire", "+25% fire rate", 80, UpgradeEffect.FIRE_RATE, 0.25f),
+            UpgradeTier("Hollow Points", "+35% damage", 120, UpgradeEffect.DAMAGE, 0.35f),
+            UpgradeTier("Long Barrel", "+20% range", 150, UpgradeEffect.RANGE, 0.20f),
+            UpgradeTier("Rapid Fire II", "+35% fire rate", 220, UpgradeEffect.FIRE_RATE, 0.35f),
+            UpgradeTier("Hollow Points II", "+50% damage", 300, UpgradeEffect.DAMAGE, 0.50f)
         )
     ),
     SUPPORT(
         "Support", "Suppresses", 180, 240f, 9f, 5.0f, 1000f, 0xFF4FC3F7.toInt(),
         baseSlowFactor = 0.85f, slowBaseDuration = 1.2f,
-        upgrades = listOf(
-            UpgradeDef("Ammo Belt", "+20% fire rate", 3, 90, UpgradeEffect.FIRE_RATE, 0.20f),
-            UpgradeDef("AP Rounds", "+30% damage", 3, 100, UpgradeEffect.DAMAGE, 0.30f),
-            UpgradeDef("Suppressing Fire", "Stronger slow", 3, 110, UpgradeEffect.SLOW_POWER, 0.10f)
+        path = listOf(
+            UpgradeTier("Ammo Belt", "+25% fire rate", 100, UpgradeEffect.FIRE_RATE, 0.25f),
+            UpgradeTier("Suppressing Fire", "Stronger slow", 140, UpgradeEffect.SLOW_POWER, 0.12f),
+            UpgradeTier("AP Rounds", "+40% damage", 180, UpgradeEffect.DAMAGE, 0.40f),
+            UpgradeTier("Suppressing Fire II", "Even stronger slow", 240, UpgradeEffect.SLOW_POWER, 0.12f),
+            UpgradeTier("Ammo Belt II", "+40% fire rate", 320, UpgradeEffect.FIRE_RATE, 0.40f)
         )
     ),
     ENGINEER(
         "Engineer", "Splash", 220, 400f, 40f, 0.45f, 550f, 0xFFFF7043.toInt(),
         baseSplash = 110f,
-        upgrades = listOf(
-            UpgradeDef("Big Payload", "+35% damage", 3, 120, UpgradeEffect.DAMAGE, 0.35f),
-            UpgradeDef("Frag Radius", "+30px blast radius", 3, 100, UpgradeEffect.SPLASH, 30f),
-            UpgradeDef("Auto Loader", "+20% fire rate", 3, 110, UpgradeEffect.FIRE_RATE, 0.20f)
+        path = listOf(
+            UpgradeTier("Big Payload", "+35% damage", 130, UpgradeEffect.DAMAGE, 0.35f),
+            UpgradeTier("Frag Radius", "+35px blast radius", 170, UpgradeEffect.SPLASH, 35f),
+            UpgradeTier("Auto Loader", "+30% fire rate", 220, UpgradeEffect.FIRE_RATE, 0.30f),
+            UpgradeTier("Big Payload II", "+50% damage", 280, UpgradeEffect.DAMAGE, 0.50f),
+            UpgradeTier("Frag Radius II", "+45px blast radius", 360, UpgradeEffect.SPLASH, 45f)
         )
     ),
     RECON(
         "Recon", "Long range", 250, 540f, 85f, 0.55f, 1700f, 0xFF90A4AE.toInt(),
-        upgrades = listOf(
-            UpgradeDef("Deadeye", "+15% crit chance (2.5x)", 3, 110, UpgradeEffect.CRIT, 0.15f),
-            UpgradeDef("Heavy Rounds", "+35% damage", 3, 120, UpgradeEffect.DAMAGE, 0.35f),
-            UpgradeDef("Piercing Shot", "Shots pierce +1 enemy", 2, 150, UpgradeEffect.PIERCE, 1f)
+        path = listOf(
+            UpgradeTier("Heavy Rounds", "+40% damage", 140, UpgradeEffect.DAMAGE, 0.40f),
+            UpgradeTier("Piercing Shot", "Shots pierce +1 enemy", 200, UpgradeEffect.PIERCE, 1f),
+            UpgradeTier("Heavy Rounds II", "+50% damage", 260, UpgradeEffect.DAMAGE, 0.50f),
+            UpgradeTier("Deadeye", "+25% crit chance (2.5x)", 320, UpgradeEffect.CRIT, 0.25f),
+            UpgradeTier("Piercing Shot II", "Shots pierce +1 more", 400, UpgradeEffect.PIERCE, 1f)
         )
     )
 }
@@ -80,19 +88,22 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     }
 
     val pos: PointF = GameMap.cellCenter(col, row)
-    val ranks = IntArray(type.upgrades.size)
+    var tier = 0
+        private set
     var invested = type.cost
         private set
     var angle = (-Math.PI / 2).toFloat()
         private set
     private var cooldown = 0f
 
-    val totalRanks get() = ranks.sum()
+    /** The next tier available to buy, or null when the path is complete. */
+    val nextTier get() = type.path.getOrNull(tier)
+    val isMaxed get() = tier >= type.path.size
 
     private fun bonus(effect: UpgradeEffect): Float {
         var b = 0f
-        for (i in type.upgrades.indices) {
-            if (type.upgrades[i].effect == effect) b += type.upgrades[i].perRank * ranks[i]
+        for (i in 0 until tier) {
+            if (type.path[i].effect == effect) b += type.path[i].amount
         }
         return b
     }
@@ -108,12 +119,10 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     val splash get() = if (type.baseSplash > 0f) type.baseSplash + bonus(UpgradeEffect.SPLASH) else 0f
     val sellValue get() = (invested * 0.7f).roundToInt()
 
-    fun upgradeCost(i: Int) = type.upgrades[i].baseCost * (ranks[i] + 1)
-    fun canRankUp(i: Int) = ranks[i] < type.upgrades[i].maxRank
-
-    fun rankUp(i: Int) {
-        invested += upgradeCost(i)
-        ranks[i]++
+    fun buyTier() {
+        val next = nextTier ?: return
+        invested += next.cost
+        tier++
     }
 
     fun update(dt: Float, zombies: List<Zombie>, projectiles: MutableList<Projectile>) {

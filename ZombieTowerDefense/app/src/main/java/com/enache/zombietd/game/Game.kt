@@ -64,10 +64,10 @@ class Game {
         return RectF(30f + col * 520f, 1330f + row * 290f, 30f + col * 520f + 500f, 1330f + row * 290f + 260f)
     }
 
-    private fun upgradeRowY(i: Int) = 1350f + i * 180f
+    private fun upgradeRowY(i: Int) = 1292f + i * 118f
     private fun upgradeButtonRect(i: Int): RectF {
         val y = upgradeRowY(i)
-        return RectF(750f, y + 25f, 1040f, y + 130f)
+        return RectF(770f, y + 12f, 1040f, y + 100f)
     }
 
     private fun mapCardRect(i: Int): RectF {
@@ -292,14 +292,12 @@ class Game {
             selectedTower = null
             return
         }
-        for (i in tower.type.upgrades.indices) {
-            if (upgradeButtonRect(i).contains(x, y)) {
-                if (tower.canRankUp(i) && money >= tower.upgradeCost(i)) {
-                    money -= tower.upgradeCost(i)
-                    tower.rankUp(i)
-                    effects.add(Effect.text(tower.pos.x, tower.pos.y - 50f, tower.type.upgrades[i].name, 0xFF81C784.toInt()))
-                }
-                return
+        val next = tower.nextTier
+        if (next != null && upgradeButtonRect(tower.tier).contains(x, y)) {
+            if (money >= next.cost) {
+                money -= next.cost
+                tower.buyTier()
+                effects.add(Effect.text(tower.pos.x, tower.pos.y - 50f, next.name, 0xFF81C784.toInt()))
             }
         }
     }
@@ -520,13 +518,10 @@ class Game {
 
             drawSoldier(canvas, t.pos.x, t.pos.y, t.angle, t.type, 0.92f)
 
-            // one pip per purchased upgrade rank
+            // one pip per purchased upgrade tier
             fillPaint.color = 0xFFFFD54F.toInt()
-            val pips = min(t.totalRanks, 9)
-            for (i in 0 until pips) {
-                val row = i / 3
-                val col = i % 3
-                canvas.drawCircle(t.pos.x - 14f + col * 14f, t.pos.y + 46f + row * 13f, 5f, fillPaint)
+            for (i in 0 until min(t.tier, t.type.path.size)) {
+                canvas.drawCircle(t.pos.x - 28f + i * 14f, t.pos.y + 46f, 5f, fillPaint)
             }
         }
     }
@@ -888,44 +883,54 @@ class Game {
 
         drawButton(canvas, sellRect, "SELL  $${tower.sellValue}", 0xFF8D6E63.toInt(), 34f)
 
-        for (i in tower.type.upgrades.indices) {
-            val u = tower.type.upgrades[i]
+        // ordered upgrade path: bought tiers, then the purchasable one, then locked tiers
+        for (i in tower.type.path.indices) {
+            val u = tower.type.path[i]
             val y = upgradeRowY(i)
-            val rank = tower.ranks[i]
+            val bought = i < tower.tier
+            val isNext = i == tower.tier
+
+            // tier number chip
+            if (bought) fillPaint.color = 0xFFFFD54F.toInt()
+            else if (isNext) fillPaint.color = 0xFF546E7A.toInt()
+            else fillPaint.color = 0xFF2C383E.toInt()
+            canvas.drawCircle(58f, y + 56f, 22f, fillPaint)
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 26f
+            textPaint.color = if (bought) 0xFF3E2E00.toInt() else Color.WHITE
+            canvas.drawText("${i + 1}", 58f, y + 65f, textPaint)
 
             textPaint.textAlign = Paint.Align.LEFT
-            textPaint.textSize = 34f
-            textPaint.color = Color.WHITE
-            canvas.drawText(u.name, 40f, y + 52f, textPaint)
-            textPaint.textSize = 26f
-            textPaint.color = 0xFF90A4AE.toInt()
-            canvas.drawText(u.desc, 40f, y + 92f, textPaint)
+            textPaint.textSize = 32f
+            textPaint.color = when {
+                bought -> 0xFFFFD54F.toInt()
+                isNext -> Color.WHITE
+                else -> 0xFF607D8B.toInt()
+            }
+            canvas.drawText(u.name, 100f, y + 46f, textPaint)
+            textPaint.textSize = 24f
+            textPaint.color = if (i <= tower.tier) 0xFF90A4AE.toInt() else 0xFF546E7A.toInt()
+            canvas.drawText(u.desc, 100f, y + 82f, textPaint)
 
-            for (k in 0 until u.maxRank) {
-                if (k < rank) {
-                    fillPaint.color = 0xFFFFD54F.toInt()
-                    canvas.drawCircle(52f + k * 36f, y + 126f, 11f, fillPaint)
-                } else {
-                    strokePaint.color = 0xFF607D8B.toInt()
-                    strokePaint.strokeWidth = 3f
-                    canvas.drawCircle(52f + k * 36f, y + 126f, 11f, strokePaint)
+            when {
+                bought -> {
+                    textPaint.textAlign = Paint.Align.RIGHT
+                    textPaint.textSize = 32f
+                    textPaint.color = 0xFF81C784.toInt()
+                    canvas.drawText("OWNED", 1030f, y + 68f, textPaint)
+                }
+                isNext -> {
+                    val affordable = money >= u.cost
+                    drawButton(canvas, upgradeButtonRect(i), "$${u.cost}", if (affordable) 0xFF2E7D32.toInt() else 0xFF37474F.toInt(), 34f)
+                }
+                else -> {
+                    textPaint.textAlign = Paint.Align.RIGHT
+                    textPaint.textSize = 28f
+                    textPaint.color = 0xFF546E7A.toInt()
+                    canvas.drawText("LOCKED", 1030f, y + 66f, textPaint)
                 }
             }
-
-            val btn = upgradeButtonRect(i)
-            if (tower.canRankUp(i)) {
-                val cost = tower.upgradeCost(i)
-                val affordable = money >= cost
-                drawButton(canvas, btn, "$$cost", if (affordable) 0xFF2E7D32.toInt() else 0xFF37474F.toInt(), 36f)
-            } else {
-                drawButton(canvas, btn, "MAX", 0xFF37474F.toInt(), 36f)
-            }
         }
-
-        textPaint.textAlign = Paint.Align.CENTER
-        textPaint.textSize = 26f
-        textPaint.color = 0xFF78909C.toInt()
-        canvas.drawText("tap outside to close", VIRTUAL_W / 2f, 1890f, textPaint)
     }
 
     private fun drawButton(canvas: Canvas, rect: RectF, label: String, color: Int, textSize: Float) {

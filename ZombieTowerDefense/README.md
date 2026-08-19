@@ -39,13 +39,13 @@ planned.
 
 ### Upgrades
 
-There are no generic tower levels — every class has its **own three upgrade tracks**,
-each purchasable rank by rank (costs rise with each rank):
+Every class has its own **ordered upgrade path** — five tiers bought in
+sequence, with rising costs. Deeper tier systems are planned.
 
-- **Assault** — Rapid Fire (fire rate), Hollow Points (damage), Long Barrel (range)
-- **Support** — Ammo Belt (fire rate), AP Rounds (damage), Suppressing Fire (stronger slow)
-- **Engineer** — Big Payload (damage), Frag Radius (blast radius), Auto Loader (fire rate)
-- **Recon** — Deadeye (critical hits, 2.5x), Heavy Rounds (damage), Piercing Shot (shots pass through enemies)
+- **Assault** — Rapid Fire → Hollow Points → Long Barrel → Rapid Fire II → Hollow Points II
+- **Support** — Ammo Belt → Suppressing Fire → AP Rounds → Suppressing Fire II → Ammo Belt II
+- **Engineer** — Big Payload → Frag Radius → Auto Loader → Big Payload II → Frag Radius II
+- **Recon** — Heavy Rounds → Piercing Shot → Heavy Rounds II → Deadeye (2.5x crits) → Piercing Shot II
 
 Selling a tower refunds 70% of everything invested, upgrades included.
 
