@@ -42,9 +42,22 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        scale = min(width / Game.VIRTUAL_W, height / Game.VIRTUAL_H)
-        offX = (width - Game.VIRTUAL_W * scale) / 2f
-        offY = (height - Game.VIRTUAL_H * scale) / 2f
+        // Fill the whole screen: fix the virtual width and let the virtual
+        // height follow the device aspect ratio. Only very squat screens
+        // (shorter than the minimum layout) fall back to letterboxing.
+        val fillScale = width / Game.VIRTUAL_W
+        val vh = height / fillScale
+        if (vh >= Game.MIN_VIRTUAL_H) {
+            scale = fillScale
+            offX = 0f
+            offY = 0f
+            game.setVirtualHeight(vh)
+        } else {
+            scale = min(width / Game.VIRTUAL_W, height / Game.MIN_VIRTUAL_H)
+            offX = (width - Game.VIRTUAL_W * scale) / 2f
+            offY = (height - Game.MIN_VIRTUAL_H * scale) / 2f
+            game.setVirtualHeight(Game.MIN_VIRTUAL_H)
+        }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -93,7 +106,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 canvas.save()
                 canvas.translate(offX, offY)
                 canvas.scale(scale, scale)
-                canvas.clipRect(0f, 0f, Game.VIRTUAL_W, Game.VIRTUAL_H)
+                canvas.clipRect(0f, 0f, Game.VIRTUAL_W, game.virtualH)
                 game.draw(canvas)
                 canvas.restore()
             } finally {

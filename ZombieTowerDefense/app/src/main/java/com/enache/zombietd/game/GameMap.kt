@@ -14,9 +14,9 @@ class GameMap(
     val water: Set<Pair<Int, Int>> = emptySet()
 ) {
     companion object {
-        const val COLS = 9
-        const val ROWS = 13
-        const val TILE = 120f
+        const val COLS = 10
+        const val ROWS = 14
+        const val TILE = 108f
         const val TOP = 120f // height of the HUD bar above the play field
 
         fun cellCenter(c: Int, r: Int) = PointF((c + 0.5f) * TILE, TOP + (r + 0.5f) * TILE)
@@ -62,11 +62,11 @@ object Maps {
     val all = listOf(
         GameMap(
             "The Long Road", "Normal",
-            listOf(listOf(-1 to 1, 7 to 1, 7 to 4, 1 to 4, 1 to 7, 7 to 7, 7 to 10, 1 to 10, 1 to 13))
+            listOf(listOf(-1 to 1, 8 to 1, 8 to 4, 1 to 4, 1 to 7, 8 to 7, 8 to 10, 1 to 10, 1 to 12, 5 to 12, 5 to 14))
         ),
         GameMap(
             "River Crossing", "Normal",
-            listOf(listOf(-1 to 2, 6 to 2, 6 to 4, 4 to 4, 4 to 9, 2 to 9, 2 to 11, 6 to 11, 6 to 13)),
+            listOf(listOf(-1 to 2, 7 to 2, 7 to 4, 4 to 4, 4 to 9, 2 to 9, 2 to 11, 7 to 11, 7 to 14)),
             water = buildSet {
                 for (c in 0 until GameMap.COLS) {
                     add(c to 6)
@@ -77,13 +77,13 @@ object Maps {
         GameMap(
             "The Fork", "Hard",
             listOf(
-                listOf(-1 to 6, 2 to 6, 2 to 2, 6 to 2, 6 to 13),
-                listOf(-1 to 6, 2 to 6, 2 to 10, 6 to 10, 6 to 13)
+                listOf(-1 to 7, 2 to 7, 2 to 2, 7 to 2, 7 to 14),
+                listOf(-1 to 7, 2 to 7, 2 to 11, 7 to 11, 7 to 14)
             )
         ),
         GameMap(
             "Death Spiral", "Easy",
-            listOf(listOf(-1 to 0, 7 to 0, 7 to 12, 1 to 12, 1 to 2, 5 to 2, 5 to 10, 3 to 10, 3 to 4, 4 to 4, 4 to 7))
+            listOf(listOf(-1 to 0, 8 to 0, 8 to 13, 1 to 13, 1 to 2, 6 to 2, 6 to 11, 3 to 11, 3 to 4, 4 to 4, 4 to 8))
         )
     )
 }

@@ -4,11 +4,25 @@ A zombie-themed tower defense game for Android, written in pure Kotlin with no g
 engine and no image assets — everything is rendered with the Android Canvas API on a
 `SurfaceView` game loop.
 
+## Game modes
+
+- **Campaign** — survive all 20 waves, then keep going in endless mode if you dare
+- **Survival** — endless waves from the start; how long can you last?
+- **Castle vs Nest** — the nest spawns zombies nonstop; send melee troops up the
+  path to destroy it while your towers defend the castle
+
 ## Gameplay
 
-Pick a map, then hold the line: the horde marches along the path toward the exit (☠).
-Build towers on the grass tiles to stop them. Survive **20 waves** to save the city,
-then keep going in endless mode if you dare.
+Pick a mode and a map, then hold the line: the horde marches along the path toward
+your gate. Build soldiers on the grass tiles to stop them. The playfield is a
+10x14 grid and the game fills the whole screen on any aspect ratio.
+
+- **Call waves early** — as soon as a wave has finished spawning you can call the
+  next one, earning a cash bonus for calling while zombies are still on the field
+- **Deploy troops** ($120) — melee soldiers march from your gate back up the path,
+  blocking zombies and fighting hand-to-hand (they carry the charge that damages
+  the nest in Castle vs Nest)
+- **Pause menu** — Resume / Settings (blood effects, screen shake) / Main Menu
 
 - **Money** — earn cash for every kill plus a bonus for each cleared wave
 - **Lives** — you start with 20; each zombie that escapes costs you lives (big ones cost more)
@@ -27,8 +41,8 @@ then keep going in endless mode if you dare.
 
 ### Soldier classes
 
-Towers are soldiers, drawn top-down with class-specific gear. More classes are
-planned.
+Towers are soldiers, drawn top-down with class-specific gear. See `TOWERS.md`
+for the full roster of implemented and planned classes.
 
 | Class    | Cost | Specialty                                        |
 |----------|------|--------------------------------------------------|
@@ -60,11 +74,12 @@ Selling a tower refunds 70% of everything invested, upgrades included.
 
 ## Controls
 
-- **Pick a map** on the title screen
+- **Pick a mode, then a map** on the home screen
 - **Tap a grass tile** → choose a tower to build
 - **Tap a tower** → buy upgrade ranks or sell it (shows its range)
-- **START WAVE** → send in the next wave
-- **1x/2x** → toggle game speed, **‖** → pause
+- **START/CALL WAVE** → send in the next wave (call early for a bonus)
+- **TROOP** → deploy a melee soldier
+- **1x/2x** → toggle game speed; pause opens the menu
 
 ## Building
 
