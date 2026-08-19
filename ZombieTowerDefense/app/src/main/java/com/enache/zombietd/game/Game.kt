@@ -204,20 +204,20 @@ class Game {
             if (t.hp <= 0f) {
                 effects.add(Effect.splat(t.pos.x, t.pos.y, 30f))
                 trIt.remove()
-            } else if (t.reachedNest) {
-                if (mode == Mode.CASTLE) {
-                    nestHp -= Troop.NEST_DAMAGE
-                    val nest = nestCenter()
-                    effects.add(Effect.splat(nest.x, nest.y, 70f))
-                    effects.add(Effect.text(nest.x, nest.y - 60f, "-${Troop.NEST_DAMAGE.roundToInt()}", 0xFFFF7043.toInt(), 48f))
-                    if (nestHp <= 0f) {
-                        nestHp = 0f
-                        state = State.VICTORY
-                        selectedCell = null
-                        selectedTower = null
-                    }
-                }
+            } else if (t.atDestination && mode == Mode.CASTLE) {
+                // satchel charge against the nest; elsewhere troops hold the entrance
+                nestHp -= Troop.NEST_DAMAGE
+                shake = 0.3f
+                val nest = nestCenter()
+                effects.add(Effect.splat(nest.x, nest.y, 80f))
+                effects.add(Effect.text(nest.x, nest.y - 70f, "-${Troop.NEST_DAMAGE.roundToInt()}", 0xFFFF7043.toInt(), 52f))
                 trIt.remove()
+                if (nestHp <= 0f) {
+                    nestHp = 0f
+                    state = State.VICTORY
+                    selectedCell = null
+                    selectedTower = null
+                }
             }
         }
 
