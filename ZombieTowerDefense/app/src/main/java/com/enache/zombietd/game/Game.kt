@@ -524,24 +524,14 @@ class Game {
 
     private fun drawTowers(canvas: Canvas) {
         for (t in towers) {
+            // emplacement pad with a type-colored rim
             fillPaint.color = 0xFF37474F.toInt()
-            canvas.drawCircle(t.pos.x, t.pos.y, 46f, fillPaint)
+            canvas.drawCircle(t.pos.x, t.pos.y, 48f, fillPaint)
+            strokePaint.color = t.type.color
+            strokePaint.strokeWidth = 4f
+            canvas.drawCircle(t.pos.x, t.pos.y, 48f, strokePaint)
 
-            canvas.save()
-            canvas.translate(t.pos.x, t.pos.y)
-            canvas.rotate(Math.toDegrees(t.angle.toDouble()).toFloat())
-            fillPaint.color = 0xFF263238.toInt()
-            when (t.type) {
-                TowerType.MORTAR -> canvas.drawRect(0f, -16f, 40f, 16f, fillPaint)
-                TowerType.TESLA -> {}
-                else -> canvas.drawRect(0f, -10f, 54f, 10f, fillPaint)
-            }
-            canvas.restore()
-
-            fillPaint.color = t.type.color
-            canvas.drawCircle(t.pos.x, t.pos.y, 30f, fillPaint)
-            fillPaint.color = 0xFF263238.toInt()
-            canvas.drawCircle(t.pos.x, t.pos.y, 12f, fillPaint)
+            drawSoldier(canvas, t.pos.x, t.pos.y, t.angle, t.type, 0.92f)
 
             // one pip per purchased upgrade rank
             fillPaint.color = 0xFFFFD54F.toInt()
@@ -549,9 +539,106 @@ class Game {
             for (i in 0 until pips) {
                 val row = i / 3
                 val col = i % 3
-                canvas.drawCircle(t.pos.x - 14f + col * 14f, t.pos.y + 44f + row * 13f, 5f, fillPaint)
+                canvas.drawCircle(t.pos.x - 14f + col * 14f, t.pos.y + 46f + row * 13f, 5f, fillPaint)
             }
         }
+    }
+
+    // camo blotches as (x, y, radius) fractions of the helmet radius — fixed so they never flicker
+    private val camoSpots = arrayOf(
+        floatArrayOf(-0.35f, -0.25f, 0.30f),
+        floatArrayOf(0.32f, -0.38f, 0.26f),
+        floatArrayOf(0.05f, 0.34f, 0.30f),
+        floatArrayOf(-0.48f, 0.30f, 0.22f),
+        floatArrayOf(0.48f, 0.12f, 0.20f)
+    )
+
+    /**
+     * Top-down cartoon soldier (helmet, backpack, pouches, weapon) drawn facing
+     * [angleRad]. Local space faces up (-y): the backpack sits behind at +y and
+     * the weapon points forward at -y.
+     */
+    private fun drawSoldier(canvas: Canvas, x: Float, y: Float, angleRad: Float, type: TowerType, scale: Float) {
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.rotate(Math.toDegrees(angleRad.toDouble()).toFloat() + 90f)
+        canvas.scale(scale, scale)
+
+        // shoulders / torso
+        fillPaint.color = 0xFF5F6E42.toInt()
+        canvas.drawRoundRect(-34f, -8f, 34f, 30f, 16f, 16f, fillPaint)
+
+        // backpack behind, with straps
+        fillPaint.color = 0xFF4E5A36.toInt()
+        canvas.drawRoundRect(-24f, 8f, 24f, 44f, 12f, 12f, fillPaint)
+        fillPaint.color = 0xFF3E4A2C.toInt()
+        canvas.drawRect(-16f, 8f, -10f, 44f, fillPaint)
+        canvas.drawRect(10f, 8f, 16f, 44f, fillPaint)
+
+        // side pouches
+        fillPaint.color = 0xFF4A5433.toInt()
+        canvas.drawRoundRect(-40f, 2f, -27f, 20f, 5f, 5f, fillPaint)
+        canvas.drawRoundRect(27f, 2f, 40f, 20f, 5f, 5f, fillPaint)
+
+        // weapon (forward = -y), styled per tower type
+        when (type) {
+            TowerType.RIFLE -> {
+                fillPaint.color = 0xFF263238.toInt()
+                canvas.drawRoundRect(9f, -58f, 18f, -14f, 4f, 4f, fillPaint)
+                fillPaint.color = type.color
+                canvas.drawRect(9f, -58f, 18f, -50f, fillPaint)
+            }
+            TowerType.SNIPER -> {
+                fillPaint.color = 0xFF263238.toInt()
+                canvas.drawRoundRect(10f, -76f, 17f, -14f, 3f, 3f, fillPaint)
+                fillPaint.color = type.color
+                canvas.drawRect(10f, -76f, 17f, -68f, fillPaint)
+            }
+            TowerType.FROST -> {
+                fillPaint.color = 0xFF263238.toInt()
+                canvas.drawRoundRect(7f, -46f, 21f, -14f, 5f, 5f, fillPaint)
+                fillPaint.color = type.color
+                canvas.drawCircle(14f, -48f, 9f, fillPaint)
+            }
+            TowerType.FLAME -> {
+                fillPaint.color = 0xFF263238.toInt()
+                canvas.drawRoundRect(6f, -42f, 22f, -14f, 5f, 5f, fillPaint)
+                fillPaint.color = type.color
+                canvas.drawCircle(-10f, 26f, 9f, fillPaint) // fuel tanks on the pack
+                canvas.drawCircle(10f, 26f, 9f, fillPaint)
+            }
+            TowerType.MORTAR -> {
+                fillPaint.color = 0xFF263238.toInt()
+                canvas.drawCircle(0f, -30f, 15f, fillPaint)
+                fillPaint.color = type.color
+                canvas.drawCircle(0f, -30f, 8f, fillPaint)
+            }
+            TowerType.TESLA -> {
+                fillPaint.color = 0xFF263238.toInt()
+                canvas.drawRect(-3f, -38f, 3f, -14f, fillPaint)
+                fillPaint.color = type.color
+                canvas.drawCircle(-12f, -36f, 6f, fillPaint)
+                canvas.drawCircle(12f, -36f, 6f, fillPaint)
+            }
+        }
+
+        // camo helmet on top
+        fillPaint.color = 0xFF77864C.toInt()
+        canvas.drawCircle(0f, 0f, 26f, fillPaint)
+        for (spot in camoSpots) {
+            fillPaint.color = if (spot[0] < 0f) 0xFF5A6B3A.toInt() else 0xFF6E5F3F.toInt()
+            canvas.drawCircle(spot[0] * 18f, spot[1] * 18f, spot[2] * 26f, fillPaint)
+        }
+        // helmet seams and rim
+        strokePaint.color = 0x553E4A2C
+        strokePaint.strokeWidth = 3f
+        canvas.drawLine(-9f, -22f, -9f, 22f, strokePaint)
+        canvas.drawLine(9f, -22f, 9f, 22f, strokePaint)
+        strokePaint.color = 0xFF3E4A2C.toInt()
+        strokePaint.strokeWidth = 4f
+        canvas.drawCircle(0f, 0f, 26f, strokePaint)
+
+        canvas.restore()
     }
 
     private fun drawZombies(canvas: Canvas) {
@@ -564,26 +651,42 @@ class Game {
             }
             val r = z.type.radius
 
+            // reaching arms: jacket sleeves with pale hands
             val armBase = kotlin.math.atan2(z.dirY, z.dirX)
             for (side in intArrayOf(-1, 1)) {
                 val a = armBase + side * (0.55f + sin(z.wobble + side) * 0.25f)
                 fillPaint.color = bodyColor
-                canvas.drawCircle(z.pos.x + cos(a) * r * 1.15f, z.pos.y + sin(a) * r * 1.15f, r * 0.32f, fillPaint)
+                canvas.drawCircle(z.pos.x + cos(a) * r * 1.1f, z.pos.y + sin(a) * r * 1.1f, r * 0.34f, fillPaint)
+                fillPaint.color = 0xFFCBBFA0.toInt()
+                canvas.drawCircle(z.pos.x + cos(a) * r * 1.42f, z.pos.y + sin(a) * r * 1.42f, r * 0.20f, fillPaint)
             }
 
+            // torso / hooded jacket
             fillPaint.color = bodyColor
             canvas.drawCircle(z.pos.x, z.pos.y, r, fillPaint)
             strokePaint.color = 0x66000000
             strokePaint.strokeWidth = 4f
             canvas.drawCircle(z.pos.x, z.pos.y, r, strokePaint)
 
-            fillPaint.color = 0xFFD32F2F.toInt()
+            // head leaning forward: hair crescent behind pale scalp, exposed brain, eyes
             val px = -z.dirY
             val py = z.dirX
-            val ex = z.pos.x + z.dirX * r * 0.45f
-            val ey = z.pos.y + z.dirY * r * 0.45f
-            canvas.drawCircle(ex + px * r * 0.3f, ey + py * r * 0.3f, r * 0.12f, fillPaint)
-            canvas.drawCircle(ex - px * r * 0.3f, ey - py * r * 0.3f, r * 0.12f, fillPaint)
+            val hx = z.pos.x + z.dirX * r * 0.30f
+            val hy = z.pos.y + z.dirY * r * 0.30f
+            fillPaint.color = 0xFF8D6E63.toInt()
+            canvas.drawCircle(hx - z.dirX * r * 0.10f, hy - z.dirY * r * 0.10f, r * 0.60f, fillPaint)
+            fillPaint.color = 0xFFD3C6A8.toInt()
+            canvas.drawCircle(hx + z.dirX * r * 0.06f, hy + z.dirY * r * 0.06f, r * 0.56f, fillPaint)
+            fillPaint.color = 0xFFE57373.toInt()
+            canvas.drawCircle(hx + px * r * 0.26f - z.dirX * r * 0.08f, hy + py * r * 0.26f - z.dirY * r * 0.08f, r * 0.22f, fillPaint)
+            fillPaint.color = 0xFFC62828.toInt()
+            canvas.drawCircle(hx + px * r * 0.26f - z.dirX * r * 0.08f, hy + py * r * 0.26f - z.dirY * r * 0.08f, r * 0.11f, fillPaint)
+
+            fillPaint.color = 0xFF8B1E1E.toInt()
+            val ex = hx + z.dirX * r * 0.38f
+            val ey = hy + z.dirY * r * 0.38f
+            canvas.drawCircle(ex + px * r * 0.22f, ey + py * r * 0.22f, r * 0.09f, fillPaint)
+            canvas.drawCircle(ex - px * r * 0.22f, ey - py * r * 0.22f, r * 0.09f, fillPaint)
 
             if (z.isSlowed) {
                 strokePaint.color = 0xCC81D4FA.toInt()
@@ -720,8 +823,12 @@ class Game {
             strokePaint.strokeWidth = 4f
             canvas.drawRoundRect(rect, 18f, 18f, strokePaint)
 
-            fillPaint.color = if (affordable) type.color else 0xFF607D8B.toInt()
-            canvas.drawCircle(rect.centerX(), rect.top + 58f, 30f, fillPaint)
+            fillPaint.color = 0xFF37474F.toInt()
+            canvas.drawCircle(rect.centerX(), rect.top + 58f, 36f, fillPaint)
+            strokePaint.color = if (affordable) type.color else 0xFF607D8B.toInt()
+            strokePaint.strokeWidth = 3f
+            canvas.drawCircle(rect.centerX(), rect.top + 58f, 36f, strokePaint)
+            drawSoldier(canvas, rect.centerX(), rect.top + 58f, (-Math.PI / 2).toFloat(), type, 0.55f)
 
             textPaint.textAlign = Paint.Align.CENTER
             textPaint.textSize = 34f
