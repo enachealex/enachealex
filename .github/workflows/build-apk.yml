@@ -7,6 +7,9 @@ on:
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,8 +29,26 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Name the APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk ZombieDefense.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: zombie-defense-apk
-          path: ZombieTowerDefense/app/build/outputs/apk/debug/app-debug.apk
+          path: ZombieTowerDefense/ZombieDefense.apk
+
+      # Publish a release so the APK has a direct download link that works
+      # from a phone browser with no GitHub login and no zip wrapper:
+      #   https://github.com/enachealex/enachealex/releases/latest/download/ZombieDefense.apk
+      - name: Publish release
+        if: github.ref == 'refs/heads/claude/zombie-tower-defense-android-yoj4bx' || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Zombie Defense build ${{ github.run_number }}
+          body: |
+            Debug APK built from `${{ github.sha }}`.
+
+            ${{ github.event.head_commit.message }}
+          files: ZombieTowerDefense/ZombieDefense.apk
