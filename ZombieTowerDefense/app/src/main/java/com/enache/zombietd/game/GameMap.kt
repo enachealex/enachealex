@@ -1,11 +1,17 @@
 package com.enache.zombietd.game
 
 import android.graphics.PointF
+import kotlin.random.Random
+
+/** A piece of scenery occupying one grid cell. Decorated cells cannot be built on. */
+class Decor(val kind: Kind, val c: Int, val r: Int, val seed: Int) {
+    enum class Kind { TREE, PINE, ROCK, HOUSE }
+}
 
 /**
  * A playable map: one or more zombie lanes over a fixed grid, plus optional
- * water tiles. Where a lane crosses water it is drawn as a bridge. Everything
- * that is neither path nor water is buildable grass.
+ * water tiles and scenery. Where a lane crosses water it is drawn as a bridge.
+ * Everything that is neither path, water, nor scenery is buildable ground.
  */
 class GameMap(
     val name: String,
@@ -18,6 +24,7 @@ class GameMap(
         const val ROWS = 14
         const val TILE = 108f
         const val TOP = 120f // height of the HUD bar above the play field
+        const val DECOR_COUNT = 9
 
         fun cellCenter(c: Int, r: Int) = PointF((c + 0.5f) * TILE, TOP + (r + 0.5f) * TILE)
 
@@ -52,38 +59,75 @@ class GameMap(
     val exitCells: Set<Pair<Int, Int>> =
         expandedLanes.mapNotNull { lane -> lane.lastOrNull { (c, r) -> isInside(c, r) } }.toSet()
 
+    /** Trees, rocks and buildings scattered deterministically over free ground. */
+    val decor: List<Decor> = buildList {
+        val rnd = Random(name.hashCode())
+        val free = mutableListOf<Pair<Int, Int>>()
+        for (r in 0 until ROWS) for (c in 0 until COLS) {
+            val key = c to r
+            if (key !in pathCells && key !in water) free.add(key)
+        }
+        free.shuffle(rnd)
+        val kinds = listOf(
+            Decor.Kind.TREE, Decor.Kind.TREE, Decor.Kind.ROCK, Decor.Kind.PINE, Decor.Kind.TREE,
+            Decor.Kind.HOUSE, Decor.Kind.PINE, Decor.Kind.ROCK, Decor.Kind.TREE
+        )
+        for (i in 0 until minOf(DECOR_COUNT, free.size)) {
+            val (c, r) = free[i]
+            add(Decor(kinds[i % kinds.size], c, r, rnd.nextInt()))
+        }
+    }
+
+    val blocked: Set<Pair<Int, Int>> = decor.map { it.c to it.r }.toSet()
+
     fun isInside(c: Int, r: Int) = c in 0 until COLS && r in 0 until ROWS
 
     fun isBuildable(c: Int, r: Int) =
-        isInside(c, r) && (c to r) !in pathCells && (c to r) !in water
+        isInside(c, r) && (c to r) !in pathCells && (c to r) !in water && (c to r) !in blocked
+
+    /** Centre of the trail cell nearest to a point (used as a barracks rally point). */
+    fun nearestPathPoint(x: Float, y: Float): PointF {
+        var best: PointF? = null
+        var bestD = Float.MAX_VALUE
+        for ((c, r) in pathCells) {
+            if (!isInside(c, r)) continue
+            val p = cellCenter(c, r)
+            val d = (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y)
+            if (d < bestD) {
+                bestD = d
+                best = p
+            }
+        }
+        return best ?: paths[0][1]
+    }
 }
 
 object Maps {
-    val all = listOf(
-        GameMap(
-            "The Long Road", "Normal",
-            listOf(listOf(-1 to 1, 8 to 1, 8 to 4, 1 to 4, 1 to 7, 8 to 7, 8 to 10, 1 to 10, 1 to 12, 5 to 12, 5 to 14))
-        ),
-        GameMap(
-            "River Crossing", "Normal",
-            listOf(listOf(-1 to 2, 7 to 2, 7 to 4, 4 to 4, 4 to 9, 2 to 9, 2 to 11, 7 to 11, 7 to 14)),
-            water = buildSet {
-                for (c in 0 until GameMap.COLS) {
-                    add(c to 6)
-                    add(c to 7)
-                }
+    val longRoad = GameMap(
+        "The Long Road", "Normal",
+        listOf(listOf(-1 to 1, 8 to 1, 8 to 4, 1 to 4, 1 to 7, 8 to 7, 8 to 10, 1 to 10, 1 to 12, 5 to 12, 5 to 14))
+    )
+    val river = GameMap(
+        "River Crossing", "Normal",
+        listOf(listOf(-1 to 2, 7 to 2, 7 to 4, 4 to 4, 4 to 9, 2 to 9, 2 to 11, 7 to 11, 7 to 14)),
+        water = buildSet {
+            for (c in 0 until GameMap.COLS) {
+                add(c to 6)
+                add(c to 7)
             }
-        ),
-        GameMap(
-            "The Fork", "Hard",
-            listOf(
-                listOf(-1 to 7, 2 to 7, 2 to 2, 7 to 2, 7 to 14),
-                listOf(-1 to 7, 2 to 7, 2 to 11, 7 to 11, 7 to 14)
-            )
-        ),
-        GameMap(
-            "Death Spiral", "Easy",
-            listOf(listOf(-1 to 0, 8 to 0, 8 to 13, 1 to 13, 1 to 2, 6 to 2, 6 to 11, 3 to 11, 3 to 4, 4 to 4, 4 to 8))
+        }
+    )
+    val fork = GameMap(
+        "The Fork", "Hard",
+        listOf(
+            listOf(-1 to 7, 2 to 7, 2 to 2, 7 to 2, 7 to 14),
+            listOf(-1 to 7, 2 to 7, 2 to 11, 7 to 11, 7 to 14)
         )
     )
+    val spiral = GameMap(
+        "Death Spiral", "Easy",
+        listOf(listOf(-1 to 0, 8 to 0, 8 to 13, 1 to 13, 1 to 2, 6 to 2, 6 to 11, 3 to 11, 3 to 4, 4 to 4, 4 to 8))
+    )
+
+    val all = listOf(longRoad, river, fork, spiral)
 }

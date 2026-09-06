@@ -6,16 +6,19 @@ engine and no image assets — everything is rendered with the Android Canvas AP
 
 ## Game modes
 
-- **Campaign** — survive all 20 waves, then keep going in endless mode if you dare
+- **Campaign** — 8 missions that unlock one at a time as you finish them; each mission
+  fields a bigger horde than the last (progress is saved on the device)
 - **Survival** — endless waves from the start; how long can you last?
 - **Castle vs Nest** — the nest spawns zombies nonstop; send melee troops up the
   path to destroy it while your towers defend the castle
 
 ## Gameplay
 
-Pick a mode and a map, then hold the line: the horde marches along the path toward
-your gate. Build soldiers on the grass tiles to stop them. The playfield is a
-10x14 grid and the game fills the whole screen on any aspect ratio.
+Pick a mode and a mission or map, then hold the line: the horde marches along the
+dirt trail toward your gate. Build soldiers on open ground to stop them. The map is
+a smooth landscape — trees, rocks and buildings block building — and the game fills
+the whole screen on any aspect ratio. Every person and creature is a jointed stick
+figure: soldiers aim their weapon arm at targets, troops stab, zombies lurch.
 
 - **Call waves early** — as soon as a wave has finished spawning you can call the
   next one, earning a cash bonus for calling while zombies are still on the field
@@ -27,7 +30,8 @@ your gate. Build soldiers on the grass tiles to stop them. The playfield is a
 - **Money** — earn cash for every kill plus a bonus for each cleared wave
 - **Lives** — you start with 20; each zombie that escapes costs you lives (big ones cost more)
 - **Waves** — zombies never get tougher, there are just *more of them*: every zombie
-  keeps the same health all game while wave sizes and spawn speed ramp up
+  keeps the same health all game while wave sizes and spawn speed ramp up, and each
+  campaign mission multiplies the horde further (x1.0 on mission 1 up to x2.3)
 - Every 5th wave ends with a boss
 
 ### Maps
@@ -50,6 +54,7 @@ for the full roster of implemented and planned classes.
 | Support  | $180 | LMG stream that suppresses (slows) zombies       |
 | Engineer | $220 | Long-range launcher with splash damage           |
 | Recon    | $250 | Ghillie sniper: huge damage at very long range   |
+| Barracks | $200 | Trains a melee squad that holds the nearest trail |
 
 ### Upgrades
 
@@ -60,6 +65,7 @@ sequence, with rising costs. Deeper tier systems are planned.
 - **Support** — Ammo Belt → Suppressing Fire → AP Rounds → Suppressing Fire II → Ammo Belt II
 - **Engineer** — Big Payload → Frag Radius → Auto Loader → Big Payload II → Frag Radius II
 - **Recon** — Heavy Rounds → Piercing Shot → Heavy Rounds II → Deadeye (2.5x crits) → Piercing Shot II
+- **Barracks** — Recruits → Body Armor → Combat Training → Reinforcements → Veterans
 
 Selling a tower refunds 70% of everything invested, upgrades included.
 

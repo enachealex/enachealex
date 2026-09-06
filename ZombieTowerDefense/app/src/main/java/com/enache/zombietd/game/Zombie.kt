@@ -36,6 +36,8 @@ class Zombie(val type: ZombieType, private val path: List<PointF>) {
         private set
     var dirY = 0f
         private set
+    var facingRight = true
+        private set
 
     var reachedEnd = false
         private set
@@ -84,6 +86,7 @@ class Zombie(val type: ZombieType, private val path: List<PointF>) {
             }
             dirX = dx / dist
             dirY = dy / dist
+            if (kotlin.math.abs(dirX) > 0.05f) facingRight = dirX > 0f
             if (dist <= remaining) {
                 pos.set(target.x, target.y)
                 wpIndex++

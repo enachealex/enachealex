@@ -8,7 +8,10 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-enum class UpgradeEffect { DAMAGE, FIRE_RATE, RANGE, CRIT, PIERCE, SLOW_POWER, SLOW_DURATION, BURN_DPS, SPLASH }
+enum class UpgradeEffect {
+    DAMAGE, FIRE_RATE, RANGE, CRIT, PIERCE, SLOW_POWER, SLOW_DURATION, BURN_DPS, SPLASH,
+    SQUAD_SIZE, TROOP_HP, TROOP_DPS
+}
 
 /** One step in a class's ordered upgrade path. Tiers must be bought in order. */
 class UpgradeTier(
@@ -22,6 +25,8 @@ class UpgradeTier(
 /**
  * Soldier classes. Each class has its own ordered upgrade path (tier 1 first,
  * then tier 2, ...); more classes and deeper paths can be added as data only.
+ * A class with [baseSquad] > 0 is a barracks: it trains melee soldiers instead
+ * of shooting.
  */
 enum class TowerType(
     val label: String,
@@ -36,6 +41,7 @@ enum class TowerType(
     val slowBaseDuration: Float = 0f,
     val baseBurnDps: Float = 0f,
     val baseSplash: Float = 0f,       // splash radius in px
+    val baseSquad: Int = 0,           // >0: barracks squad size
     val path: List<UpgradeTier>
 ) {
     ASSAULT(
@@ -79,12 +85,28 @@ enum class TowerType(
             UpgradeTier("Deadeye", "+25% crit chance (2.5x)", 320, UpgradeEffect.CRIT, 0.25f),
             UpgradeTier("Piercing Shot II", "Shots pierce +1 more", 400, UpgradeEffect.PIERCE, 1f)
         )
-    )
+    ),
+    BARRACKS(
+        "Barracks", "Melee squad", 200, 170f, 0f, 0f, 0f, 0xFF8BC34A.toInt(),
+        baseSquad = 2,
+        path = listOf(
+            UpgradeTier("Recruits", "+1 squad member", 120, UpgradeEffect.SQUAD_SIZE, 1f),
+            UpgradeTier("Body Armor", "+60 soldier HP", 150, UpgradeEffect.TROOP_HP, 60f),
+            UpgradeTier("Combat Training", "+15 soldier damage/s", 180, UpgradeEffect.TROOP_DPS, 15f),
+            UpgradeTier("Reinforcements", "+1 squad member", 260, UpgradeEffect.SQUAD_SIZE, 1f),
+            UpgradeTier("Veterans", "+90 soldier HP", 320, UpgradeEffect.TROOP_HP, 90f)
+        )
+    );
+
+    val isBarracks get() = baseSquad > 0
 }
 
 class Tower(val type: TowerType, val col: Int, val row: Int) {
     companion object {
         const val CRIT_MULTIPLIER = 2.5f
+        const val SQUAD_BASE_HP = 180f
+        const val SQUAD_BASE_DPS = 35f
+        const val SQUAD_RESPAWN = 6f
     }
 
     val pos: PointF = GameMap.cellCenter(col, row)
@@ -95,6 +117,11 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     var angle = (-Math.PI / 2).toFloat()
         private set
     private var cooldown = 0f
+
+    // barracks state
+    val soldiers = mutableListOf<Troop>()
+    var respawnTimer = 0f
+    var rallyPoint: PointF? = null
 
     /** The next tier available to buy, or null when the path is complete. */
     val nextTier get() = type.path.getOrNull(tier)
@@ -117,6 +144,9 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     val slowDuration get() = type.slowBaseDuration + bonus(UpgradeEffect.SLOW_DURATION)
     val burnDps get() = type.baseBurnDps + bonus(UpgradeEffect.BURN_DPS)
     val splash get() = if (type.baseSplash > 0f) type.baseSplash + bonus(UpgradeEffect.SPLASH) else 0f
+    val squadSize get() = type.baseSquad + bonus(UpgradeEffect.SQUAD_SIZE).roundToInt()
+    val squadHp get() = SQUAD_BASE_HP + bonus(UpgradeEffect.TROOP_HP)
+    val squadDps get() = SQUAD_BASE_DPS + bonus(UpgradeEffect.TROOP_DPS)
     val sellValue get() = (invested * 0.7f).roundToInt()
 
     fun buyTier() {
@@ -126,6 +156,7 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     }
 
     fun update(dt: Float, zombies: List<Zombie>, projectiles: MutableList<Projectile>) {
+        if (type.isBarracks) return
         cooldown -= dt
 
         var best: Zombie? = null

@@ -13,6 +13,7 @@ pure data (`TowerType` entries), so introducing one is stats + a path + a sprite
 | Support  | $180 | Crowd slow / DPS    | Ammo Belt → Suppressing Fire → AP Rounds → Suppressing Fire II → Ammo Belt II |
 | Engineer | $220 | Splash / area denial| Big Payload → Frag Radius → Auto Loader → Big Payload II → Frag Radius II |
 | Recon    | $250 | Single-target burst | Heavy Rounds → Piercing Shot → Heavy Rounds II → Deadeye → Piercing Shot II |
+| Barracks | $200 | Melee blocker squad | Recruits → Body Armor → Combat Training → Reinforcements → Veterans |
 
 ## Planned
 

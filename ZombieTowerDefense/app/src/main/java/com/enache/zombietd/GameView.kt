@@ -7,8 +7,19 @@ import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.enache.zombietd.game.Game
+import com.enache.zombietd.game.Missions
+import com.enache.zombietd.game.Progress
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.min
+
+/** Campaign progress saved on the device so unlocked missions survive restarts. */
+private class PrefsProgress(context: Context) : Progress {
+    private val prefs = context.getSharedPreferences("zombietd", Context.MODE_PRIVATE)
+    override fun unlockedMissions() = prefs.getInt("unlocked", 1).coerceIn(1, Missions.all.size)
+    override fun setUnlockedMissions(count: Int) {
+        prefs.edit().putInt("unlocked", count.coerceIn(1, Missions.all.size)).apply()
+    }
+}
 
 /**
  * Hosts the game loop thread. The game simulates and draws on a fixed
@@ -16,7 +27,7 @@ import kotlin.math.min
  */
 class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
 
-    private val game = Game()
+    private val game = Game(PrefsProgress(context))
     private val taps = ConcurrentLinkedQueue<PointF>()
 
     @Volatile
