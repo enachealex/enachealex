@@ -12,6 +12,13 @@ import com.enache.zombietd.game.Progress
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.min
 
+/** The installed app's versionName, shown on the home screen. */
+private fun appVersion(context: Context): String = try {
+    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+} catch (_: Exception) {
+    ""
+}
+
 /** Campaign progress saved on the device so unlocked missions survive restarts. */
 private class PrefsProgress(context: Context) : Progress {
     private val prefs = context.getSharedPreferences("zombietd", Context.MODE_PRIVATE)
@@ -27,7 +34,7 @@ private class PrefsProgress(context: Context) : Progress {
  */
 class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
 
-    private val game = Game(PrefsProgress(context))
+    private val game = Game(PrefsProgress(context), appVersion(context))
     private val taps = ConcurrentLinkedQueue<PointF>()
 
     @Volatile

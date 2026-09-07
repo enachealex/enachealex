@@ -56,7 +56,7 @@ for the full roster of implemented and planned classes.
 | Support  | $180 | LMG stream that suppresses (slows) zombies       |
 | Engineer | $220 | Long-range launcher with splash damage           |
 | Recon    | $250 | Ghillie sniper: huge damage at very long range   |
-| Barracks | $200 | Trains a melee squad that holds the nearest trail |
+| Barracks | $200 | Trains a 3-soldier melee squad that holds the nearest trail |
 
 ### Upgrades
 
@@ -68,13 +68,13 @@ more expensive. Five levels per tower.
 - **Support** — Fire Rate +8%, Suppression +5%, Damage +5%
 - **Engineer** — Damage +7%, Blast Radius +2%, Fire Rate +5%
 - **Recon** — Range +20% (starts at 250), Damage +10%, Accuracy +10% (starts at 70/100)
-- **Barracks** — Combat Training +8%, Body Armor +8%, Recruiting +5%
+- **Barracks** — Soldier HP +8%, Damage +5%, Respawn Rate -0.5s
 
 Range values are design units scaled by 1.5x on the board: an Assault opens at 180px
 (roughly 1.7 tiles) and reaches 330px fully upgraded, while a Recon spans 375px to 750px.
 
 Reaching level 2 and level 4 gives Recon a piercing shot; reaching level 3 and level 5
-gives the Barracks another soldier. Recon's accuracy is its hit chance — below 100 some
+gives the Barracks a fourth soldier (it starts with three). Recon's accuracy is its hit chance — below 100 some
 shots miss, above 100 the surplus becomes critical hits.
 
 Selling a tower refunds 70% of everything invested, upgrades included.

@@ -13,7 +13,10 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-class Game(private val progress: Progress = MemoryProgress()) {
+class Game(
+    private val progress: Progress = MemoryProgress(),
+    private val versionName: String = ""
+) {
 
     companion object {
         const val VIRTUAL_W = 1080f
@@ -210,7 +213,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
                 val s = Troop(listOf(PointF(t.pos.x, t.pos.y), dest), t.squadHp, t.squadDps, owner = t)
                 t.soldiers.add(s)
                 troops.add(s)
-                t.respawnTimer = Tower.SQUAD_RESPAWN
+                t.respawnTimer = t.squadRespawn
             }
         }
 
@@ -656,6 +659,12 @@ class Game(private val progress: Progress = MemoryProgress()) {
         textPaint.color = 0xFF78909C.toInt()
         canvas.drawText("Campaign progress: $done / ${Missions.all.size} missions complete", VIRTUAL_W / 2f, virtualH - 120f, textPaint)
         canvas.drawText("Build soldiers on open ground  •  Deploy troops for melee", VIRTUAL_W / 2f, virtualH - 70f, textPaint)
+        if (versionName.isNotEmpty()) {
+            textPaint.textAlign = Paint.Align.RIGHT
+            textPaint.textSize = 24f
+            textPaint.color = 0xFF546E7A.toInt()
+            canvas.drawText("v$versionName", VIRTUAL_W - 24f, virtualH - 20f, textPaint)
+        }
     }
 
     private fun drawMissionSelect(canvas: Canvas) {
@@ -1191,7 +1200,8 @@ class Game(private val progress: Progress = MemoryProgress()) {
         textPaint.textSize = 26f
         textPaint.color = 0xFF90A4AE.toInt()
         val stats = if (tower.type.isBarracks) {
-            "SQUAD ${tower.soldiers.count { it.alive }}/${tower.squadSize}   HP ${tower.squadHp.roundToInt()}   DPS ${tower.squadDps.roundToInt()}"
+            "SQUAD ${tower.soldiers.count { it.alive }}/${tower.squadSize}   HP ${tower.squadHp.roundToInt()}   " +
+                "DPS ${tower.squadDps.roundToInt()}   RESPAWN %.1fs".format(tower.squadRespawn)
         } else buildString {
             append("DMG ${tower.damage.roundToInt()}   RNG ${tower.range.roundToInt()}   ")
             append("ROF %.1f/s".format(tower.fireRate))

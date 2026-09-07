@@ -10,7 +10,7 @@ import kotlin.random.Random
 
 enum class StatKind {
     DAMAGE, RANGE_PCT, RANGE_FLAT, FIRE_RATE, SUPPRESSION, BLAST, ACCURACY,
-    TROOP_DPS, TROOP_HP, SQUAD
+    TROOP_DPS, TROOP_HP, RESPAWN
 }
 
 /**
@@ -78,11 +78,11 @@ enum class TowerType(
     ),
     BARRACKS(
         "Barracks", "Melee squad", 200, 100, 170f, 0f, 0f, 0f, 0xFF8BC34A.toInt(),
-        baseSquad = 2,
+        baseSquad = 3,
         stats = listOf(
-            UpgradeStat("Combat Training", "+8% squad damage", StatKind.TROOP_DPS, 0.08f),
-            UpgradeStat("Body Armor", "+8% squad health", StatKind.TROOP_HP, 0.08f),
-            UpgradeStat("Recruiting", "+5% squad HP, +1 soldier at L3/L5", StatKind.SQUAD, 0.05f)
+            UpgradeStat("Soldier HP", "+8% soldier health", StatKind.TROOP_HP, 0.08f),
+            UpgradeStat("Damage", "+5% soldier damage", StatKind.TROOP_DPS, 0.05f),
+            UpgradeStat("Respawn Rate", "-0.5s respawn time", StatKind.RESPAWN, 0.5f)
         )
     );
 
@@ -104,8 +104,9 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         const val SQUAD_RESPAWN = 6f
         /** Levels at which an accuracy class gains a piercing shot. */
         val PIERCE_LEVELS = listOf(2, 4)
-        /** Levels at which a barracks squad gains another soldier. */
-        val SQUAD_LEVELS = listOf(3, 5)
+        /** Reaching the final level adds a fourth soldier to a barracks squad. */
+        val SQUAD_LEVELS = listOf(MAX_LEVEL)
+        const val SQUAD_MIN_RESPAWN = 1.5f
     }
 
     val pos: PointF = GameMap.cellCenter(col, row)
@@ -181,8 +182,9 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
 
     val squadSize get() =
         if (type.isBarracks) type.baseSquad + SQUAD_LEVELS.count { level >= it } else type.baseSquad
-    val squadHp get() = SQUAD_BASE_HP * (1f + total(StatKind.TROOP_HP) + total(StatKind.SQUAD))
+    val squadHp get() = SQUAD_BASE_HP * (1f + total(StatKind.TROOP_HP))
     val squadDps get() = SQUAD_BASE_DPS * (1f + total(StatKind.TROOP_DPS))
+    val squadRespawn get() = (SQUAD_RESPAWN - total(StatKind.RESPAWN)).coerceAtLeast(SQUAD_MIN_RESPAWN)
 
     val sellValue get() = (invested * 0.7f).roundToInt()
 
