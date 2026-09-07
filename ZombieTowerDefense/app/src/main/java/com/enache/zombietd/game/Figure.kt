@@ -19,7 +19,7 @@ import kotlin.math.sin
  */
 object Figure {
     enum class Kind { SOLDIER, TROOP, ZOMBIE }
-    enum class Weapon { NONE, KNIFE, RIFLE, LMG, LAUNCHER, SNIPER }
+    enum class Weapon { NONE, KNIFE, RIFLE, LMG, LAUNCHER, SNIPER, FLAMER }
 
     private val limbPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -173,6 +173,7 @@ object Figure {
                 Weapon.LMG -> { len = 34f; gw = w * 1.5f }
                 Weapon.LAUNCHER -> { len = 30f; gw = w * 2f }
                 Weapon.SNIPER -> { len = 44f; gw = w * 0.9f }
+                Weapon.FLAMER -> { len = 22f; gw = w * 1.3f }
                 else -> { len = 0f; gw = w }
             }
             if (len > 0f) {
@@ -184,6 +185,14 @@ object Figure {
                     Weapon.LAUNCHER -> c.drawCircle(gx + dx * len, gy + dy * len, gw * 0.7f, fillPaint)
                     Weapon.SNIPER -> c.drawCircle(gx + dx * 16f - px * 4f, gy + dy * 16f - py * 4f, 3f, fillPaint)
                     Weapon.LMG -> c.drawRect(gx + dx * 12f + px * 3f, gy + dy * 12f + py * 3f, gx + dx * 20f + px * 9f, gy + dy * 20f + py * 9f, fillPaint)
+                    Weapon.FLAMER -> {
+                        // twin fuel tanks on the soldier's back
+                        fillPaint.color = darken(accent, 0.75f)
+                        c.drawRoundRect(-13f, 14f, -3f, 40f, 5f, 5f, fillPaint)
+                        c.drawRoundRect(3f, 14f, 13f, 40f, 5f, 5f, fillPaint)
+                        fillPaint.color = accent
+                        c.drawCircle(gx + dx * len, gy + dy * len, gw * 0.6f, fillPaint)
+                    }
                     else -> c.drawCircle(gx + dx * len, gy + dy * len, gw * 0.5f, fillPaint)
                 }
             }

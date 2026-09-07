@@ -64,6 +64,7 @@ class Game(
     private val towers = mutableListOf<Tower>()
     private val troops = mutableListOf<Troop>()
     private val projectiles = mutableListOf<Projectile>()
+    private val fires = mutableListOf<Fire>()
     private val effects = mutableListOf<Effect>()
     private val waves = WaveManager()
 
@@ -265,7 +266,17 @@ class Game(
             }
         }
 
-        for (t in towers) t.update(dt, zombies, projectiles)
+        for (t in towers) t.update(dt, zombies, projectiles, fires)
+
+        // burning ground keeps damaging anything walking through it
+        for (f in fires) {
+            f.update(dt)
+            for (z in zombies) {
+                if (!z.alive) continue
+                if (hypot(z.pos.x - f.x, z.pos.y - f.y) <= f.radius) z.hp -= f.dps * dt
+            }
+        }
+        fires.removeAll { it.done }
 
         val pIt = projectiles.iterator()
         while (pIt.hasNext()) {
@@ -575,6 +586,7 @@ class Game(
         towers.clear()
         troops.clear()
         projectiles.clear()
+        fires.clear()
         effects.clear()
         waves.reset()
         selectedPad = null
@@ -607,7 +619,9 @@ class Game(
         }
         drawMap(canvas)
         drawSplats(canvas)
+        drawFires(canvas)
         drawTowers(canvas)
+        drawFlameJets(canvas)
         drawTroops(canvas)
         drawZombies(canvas)
         drawProjectiles(canvas)
@@ -891,6 +905,58 @@ class Game(
         }
     }
 
+    /** Napalm patches: a flickering pool of fire that fades as it burns out. */
+    private fun drawFires(canvas: Canvas) {
+        for (f in fires) {
+            val a = (150 * f.strength).toInt().coerceIn(0, 255)
+            fillPaint.color = 0xFF6D1B00.toInt()
+            fillPaint.alpha = a / 2
+            canvas.drawCircle(f.x, f.y, f.radius, fillPaint)
+            val rnd = Random(f.seed)
+            for (i in 0 until 7) {
+                val ang = rnd.nextFloat() * 6.28f + clock * 1.5f
+                val rad = f.radius * (0.25f + rnd.nextFloat() * 0.6f)
+                val fx = f.x + cos(ang) * rad
+                val fy = f.y + sin(ang) * rad
+                val flick = 10f + sin(clock * 11f + i) * 4f
+                fillPaint.color = if (i % 2 == 0) 0xFFFF6D00.toInt() else 0xFFFFC107.toInt()
+                fillPaint.alpha = a
+                canvas.drawCircle(fx, fy, flick * f.strength, fillPaint)
+            }
+            fillPaint.alpha = 255
+        }
+    }
+
+    /** The lit jet of flame while a Flametrooper is firing. */
+    private fun drawFlameJets(canvas: Canvas) {
+        for (t in towers) {
+            if (!t.type.isFlame || t.flameTimer <= 0f) continue
+            val half = if (t.hasCone) Tower.CONE_HALF_ANGLE else 0.22f
+            val reach = t.range
+            canvas.save()
+            canvas.translate(t.pos.x, t.pos.y)
+            canvas.rotate(Math.toDegrees(t.angle.toDouble()).toFloat())
+            for (layer in 0 until 3) {
+                val f = 1f - layer * 0.28f
+                val wobble = sin(clock * 22f + layer) * 0.05f
+                val path = android.graphics.Path()
+                path.moveTo(20f, 0f)
+                path.lineTo(reach * f, -kotlin.math.tan(half + wobble) * reach * f)
+                path.lineTo(reach * f, kotlin.math.tan(half + wobble) * reach * f)
+                path.close()
+                fillPaint.color = when (layer) {
+                    0 -> 0xFFFF3D00.toInt()
+                    1 -> 0xFFFF9100.toInt()
+                    else -> 0xFFFFD54F.toInt()
+                }
+                fillPaint.alpha = 120 - layer * 15
+                canvas.drawPath(path, fillPaint)
+            }
+            fillPaint.alpha = 255
+            canvas.restore()
+        }
+    }
+
     private fun drawSplats(canvas: Canvas) {
         if (!bloodFx) return
         for (e in effects) {
@@ -907,6 +973,7 @@ class Game(
         TowerType.SUPPORT -> Figure.Weapon.LMG
         TowerType.ENGINEER -> Figure.Weapon.LAUNCHER
         TowerType.RECON -> Figure.Weapon.SNIPER
+        TowerType.FLAME -> Figure.Weapon.FLAMER
         TowerType.BARRACKS -> Figure.Weapon.NONE
     }
 
@@ -1036,6 +1103,7 @@ class Game(
                 TowerType.RECON -> 10f
                 TowerType.ENGINEER -> 13f
                 TowerType.SUPPORT -> 6f
+                TowerType.FLAME -> 5f
                 else -> 8f
             }
             canvas.drawCircle(p.x, p.y, radius, fillPaint)
@@ -1210,6 +1278,11 @@ class Game(
             if (tower.pierce > 0) append("   PIERCE ${tower.pierce}")
             if (tower.type.baseSlowFactor < 1f) append("   SUPP ${(tower.suppression * 100).roundToInt()}%")
             if (tower.splash > 0f) append("   BLAST ${tower.splash.roundToInt()}")
+            if (tower.type.isFlame) {
+                append("   BURN ${tower.burnDps.roundToInt()}/s for %.1fs".format(tower.burnDuration))
+                if (tower.hasCone) append("   CONE")
+                if (tower.hasNapalm) append("   NAPALM")
+            }
         }
         canvas.drawText(stats, 40f, towerPanelRect.top + 122f, textPaint)
 

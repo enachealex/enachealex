@@ -17,6 +17,7 @@ stats are offered again at a higher price (`upgrade cost x level`). Five levels.
 | Support  | $180 | $90  | Fire Rate +8% | Suppression +5% | Damage +5% |
 | Engineer | $220 | $110 | Damage +7% | Blast Radius +2% | Fire Rate +5% |
 | Recon    | $250 | $120 | Range +20% (from 250) | Damage +10% | Accuracy +10% (from 70) |
+| Flame.   | $200 | $100 | Burn Damage +8% | Incendiary Fuel +6% | Range +15 (from 140) |
 | Barracks | $200 | $100 | Soldier HP +8% | Damage +5% | Respawn Rate -0.5s |
 
 All range figures are design units; the board applies a global `RANGE_SCALE` of
@@ -26,46 +27,16 @@ Level milestones: **Recon** gains +1 piercing shot on reaching level 2 and level
 **Barracks** fields 3 soldiers from the moment it is built and a 4th on reaching the
 final level; its respawn timer starts at 6s and floors at 1.5s.
 
+**Incendiary Fuel** (Flametrooper only) alternates by the level it is bought at:
+odd levels (1, 3, 5) add +6% burn *time*, even levels (2, 4) add +6% burn *damage*.
+
+**Flametrooper milestones:** at level 3 the jet widens into a cone that washes every
+zombie in front of it; at level 5 it leaves a burning patch of ground behind that
+keeps damaging anything walking over it for 3 seconds.
+
 **Accuracy** (Recon only) is hit chance out of 100: at 70 roughly three shots in ten
 miss outright (a MISS pops up). Once accuracy passes 100 every shot connects and the
 excess becomes critical-hit chance at 2.5x damage.
-
-## Next up: Flametrooper (spec, not yet built)
-
-A short-range area class that trades single-target punch for sustained damage over
-a crowd — the counter to the big walker packs that later missions throw at you.
-
-**Base stats (proposed)**
-
-| Field | Value | Note |
-|-------|-------|------|
-| Cost | $200 | between Support and Engineer |
-| Upgrade base | $100 | so a full 5 levels runs $1,500 |
-| Range | 140 design units (210px) | deliberately short — it wants a corner pad |
-| Damage | 6 per tick | applied directly, no projectile |
-| Fire rate | 4 /s | a continuous stream rather than shots |
-| Burn | 10 dmg/s for 2s | refreshed by every tick, so it stacks up while in the cone |
-
-**The three upgradeable stats (proposed)**
-
-| Stat | Per level | Effect |
-|------|-----------|--------|
-| Burn Damage | +8% | raises the damage-over-time left on a zombie |
-| Fire Rate | +6% | more ticks, so burn is refreshed more often |
-| Range | +15 | reaches further down the trail (flat, like Assault) |
-
-**Level milestones (proposed):** reaching level 3 widens the flame into a cone that
-hits every zombie in front of it rather than one target; reaching level 5 leaves a
-burning patch on the trail for 3s after each burst.
-
-**Mechanics already in the engine:** burn damage-over-time (`Zombie.applyBurn`) and
-splash targeting both exist and are unused by the current five classes, so the cone
-and the burn stack are mostly wiring rather than new systems. The napalm patch is the
-one genuinely new piece — a timed ground effect that damages anything walking over it.
-
-**Visuals:** stick figure with a fuel tank on the back and a short wand; the flame is
-a translucent orange cone that flickers, and burning zombies already show an orange
-ring.
 
 ## Planned
 

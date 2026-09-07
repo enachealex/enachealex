@@ -10,7 +10,7 @@ import kotlin.random.Random
 
 enum class StatKind {
     DAMAGE, RANGE_PCT, RANGE_FLAT, FIRE_RATE, SUPPRESSION, BLAST, ACCURACY,
-    TROOP_DPS, TROOP_HP, RESPAWN
+    BURN_DPS, BURN_DURATION, BURN_ALT, TROOP_DPS, TROOP_HP, RESPAWN
 }
 
 /**
@@ -38,6 +38,8 @@ enum class TowerType(
     val slowBaseDuration: Float = 0f,
     val baseSplash: Float = 0f,       // splash radius in px
     val baseAccuracy: Float = 0f,     // >0: shots can miss, and excess becomes crit
+    val baseBurnDps: Float = 0f,      // >0: hits set the target alight
+    val baseBurnDuration: Float = 0f,
     val baseSquad: Int = 0,           // >0: barracks squad size
     val stats: List<UpgradeStat>
 ) {
@@ -76,6 +78,15 @@ enum class TowerType(
             UpgradeStat("Accuracy", "+10% accuracy", StatKind.ACCURACY, 0.10f)
         )
     ),
+    FLAME(
+        "Flametrooper", "Burns", 200, 100, 140f, 6f, 4f, 0f, 0xFFFF3D00.toInt(),
+        baseBurnDps = 10f, baseBurnDuration = 2f,
+        stats = listOf(
+            UpgradeStat("Burn Damage", "+8% burn damage", StatKind.BURN_DPS, 0.08f),
+            UpgradeStat("Incendiary Fuel", "+6% burn time (L1/3/5), burn damage (L2/4)", StatKind.BURN_ALT, 0.06f),
+            UpgradeStat("Range", "+15 range", StatKind.RANGE_FLAT, 15f)
+        )
+    ),
     BARRACKS(
         "Barracks", "Melee squad", 200, 100, 170f, 0f, 0f, 0f, 0xFF8BC34A.toInt(),
         baseSquad = 3,
@@ -88,6 +99,8 @@ enum class TowerType(
 
     val isBarracks get() = baseSquad > 0
     val hasAccuracy get() = baseAccuracy > 0f
+    /** Flame classes wash a cone of fire over the trail instead of firing shots. */
+    val isFlame get() = baseBurnDps > 0f
 }
 
 class Tower(val type: TowerType, val col: Int, val row: Int) {
@@ -107,6 +120,15 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         /** Reaching the final level adds a fourth soldier to a barracks squad. */
         val SQUAD_LEVELS = listOf(MAX_LEVEL)
         const val SQUAD_MIN_RESPAWN = 1.5f
+        /** From this level a flamer washes everything in a cone, not just one target. */
+        const val CONE_LEVEL = 3
+        const val CONE_HALF_ANGLE = 0.62f // ~35 degrees either side
+        /** At the final level a flamer leaves burning ground behind. */
+        const val NAPALM_LEVEL = MAX_LEVEL
+        const val NAPALM_INTERVAL = 2f
+        const val NAPALM_LIFE = 3f
+        const val NAPALM_RADIUS = 55f
+        const val NAPALM_DPS_SHARE = 0.6f
     }
 
     val pos: PointF = GameMap.cellCenter(col, row)
@@ -126,6 +148,11 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     val soldiers = mutableListOf<Troop>()
     var respawnTimer = 0f
     var rallyPoint: PointF? = null
+
+    // flame state: how long the jet stays lit, and the napalm drop timer
+    var flameTimer = 0f
+        private set
+    private var napalmTimer = 0f
 
     val isMaxed get() = level > MAX_LEVEL
     val displayLevel get() = level.coerceAtMost(MAX_LEVEL)
@@ -184,13 +211,48 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         if (type.isBarracks) type.baseSquad + SQUAD_LEVELS.count { level >= it } else type.baseSquad
     val squadHp get() = SQUAD_BASE_HP * (1f + total(StatKind.TROOP_HP))
     val squadDps get() = SQUAD_BASE_DPS * (1f + total(StatKind.TROOP_DPS))
+    /**
+     * The alternating fuel stat pays out differently depending on the level it was
+     * bought at: odd levels lengthen the burn, even levels deepen it. Each stat is
+     * bought exactly once per level, so the levels it covers are simply every level
+     * already completed plus the current one if it has been taken.
+     */
+    private fun altPurchases(): Pair<Int, Int> {
+        val idx = type.stats.indexOfFirst { it.kind == StatKind.BURN_ALT }
+        if (idx < 0) return 0 to 0
+        var longer = 0
+        var hotter = 0
+        for (lvl in 1..MAX_LEVEL) {
+            val bought = lvl < level || (lvl == level && boughtThisLevel[idx])
+            if (!bought) continue
+            if (lvl % 2 == 1) longer++ else hotter++
+        }
+        return longer to hotter
+    }
+
+    private val altAmount get() = type.stats.firstOrNull { it.kind == StatKind.BURN_ALT }?.amount ?: 0f
+
+    val burnDps get() =
+        type.baseBurnDps * (1f + total(StatKind.BURN_DPS) + altAmount * altPurchases().second)
+    val burnDuration get() =
+        type.baseBurnDuration * (1f + total(StatKind.BURN_DURATION) + altAmount * altPurchases().first)
+    val hasCone get() = type.isFlame && level >= CONE_LEVEL
+    val hasNapalm get() = type.isFlame && level >= NAPALM_LEVEL
+
     val squadRespawn get() = (SQUAD_RESPAWN - total(StatKind.RESPAWN)).coerceAtLeast(SQUAD_MIN_RESPAWN)
 
     val sellValue get() = (invested * 0.7f).roundToInt()
 
-    fun update(dt: Float, zombies: List<Zombie>, projectiles: MutableList<Projectile>) {
+    fun update(
+        dt: Float,
+        zombies: List<Zombie>,
+        projectiles: MutableList<Projectile>,
+        fires: MutableList<Fire>? = null
+    ) {
         if (type.isBarracks) return
         cooldown -= dt
+        if (flameTimer > 0f) flameTimer -= dt
+        if (napalmTimer > 0f) napalmTimer -= dt
 
         var best: Zombie? = null
         var bestProgress = -Float.MAX_VALUE
@@ -211,6 +273,34 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         angle = atan2(target.pos.y - pos.y, target.pos.x - pos.x)
         if (cooldown > 0f) return
         cooldown = 1f / fireRate
+
+        if (type.isFlame) {
+            flameTimer = 1f / fireRate
+            val burn = burnDps
+            val dur = burnDuration
+            val dmg = damage
+            for (z in zombies) {
+                if (!z.alive) continue
+                val dx = z.pos.x - pos.x
+                val dy = z.pos.y - pos.y
+                if (hypot(dx, dy) > r) continue
+                // before the cone upgrade only the aimed-at zombie is hit
+                if (z !== target) {
+                    if (!hasCone) continue
+                    var delta = atan2(dy, dx) - angle
+                    while (delta > Math.PI) delta -= (2 * Math.PI).toFloat()
+                    while (delta < -Math.PI) delta += (2 * Math.PI).toFloat()
+                    if (kotlin.math.abs(delta) > CONE_HALF_ANGLE) continue
+                }
+                z.hp -= dmg
+                z.applyBurn(burn, dur)
+            }
+            if (hasNapalm && fires != null && napalmTimer <= 0f) {
+                napalmTimer = NAPALM_INTERVAL
+                fires.add(Fire(target.pos.x, target.pos.y, NAPALM_RADIUS, burn * NAPALM_DPS_SHARE, NAPALM_LIFE))
+            }
+            return
+        }
 
         val missed = Random.nextFloat() > hitChance
         val isCrit = !missed && critChance > 0f && Random.nextFloat() < critChance
