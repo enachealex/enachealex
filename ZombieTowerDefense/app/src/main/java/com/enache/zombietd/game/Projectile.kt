@@ -15,7 +15,9 @@ class Projectile(
     val slowFactor: Float = 1f,
     val slowDuration: Float = 0f,
     val burnDps: Float = 0f,
-    val splash: Float = 0f
+    val splash: Float = 0f,
+    val freeze: Float = 0f,
+    val freezeBurst: Boolean = false
 ) {
     var target = target
         private set

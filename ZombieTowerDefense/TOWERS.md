@@ -20,6 +20,25 @@ stats are offered again at a higher price (`upgrade cost x level`). Five levels.
 | Flame.   | $200 | $100 | Burn Damage +8% | Incendiary Fuel +6% | Range +15 (from 140) |
 | Barracks | $200 | $100 | Soldier HP +8% | Damage +5% | Respawn Rate -0.5s |
 
+### Promotions
+
+A class can have a successor it turns into once fully upgraded. The promotion is
+offered on the tower panel in place of the maxed-out upgrade rows; taking it swaps
+the tower in place, restarts it at level 1 with the successor's own three stats, and
+rolls everything already spent into the new tower's sell value.
+
+| From | To | Price | Unlocks |
+|------|----|-------|---------|
+| Support (maxed) | **Frost Trooper** | $600 | A far harder slow, an area burst, and freezing |
+
+| Class | Upg. base | Stat 1 | Stat 2 | Stat 3 |
+|-------|-----------|--------|--------|--------|
+| Frost Trooper | $160 | Freeze Power +6% | Damage +8% | Chill Duration +10% |
+
+Frost base stats: range 260 design units, 18 damage at 1.6/s, a 90px burst, a 45%
+slow for 2.5s. **Freeze** stops a zombie dead: it lands on the target from level 3,
+and from level 5 it catches everything in the burst.
+
 All range figures are design units; the board applies a global `RANGE_SCALE` of
 1.5x, so Assault opens at 180px (about 1.7 tiles) and a maxed Recon reaches 750px.
 
@@ -42,7 +61,6 @@ excess becomes critical-hit chance at 2.5x damage.
 
 | Class          | Est. cost | Role                        | Concept |
 |----------------|-----------|-----------------------------|---------|
-| Frost Trooper  | $160      | Hard slow / freeze          | Snap-slow bursts; top tier briefly freezes small zombies solid |
 | Tesla Trooper  | $300      | Chain damage                | Lightning arcs between clustered zombies; upgrades add chain count and stun |
 | Minigunner     | $350      | Sustained shred             | Slow spin-up to extreme fire rate; loses target = spins down |
 | Demolitionist  | $400      | Heavy artillery             | Slow, huge splash; can crack Brute armor; top tier = MOAB-class boss damage |
@@ -72,4 +90,6 @@ Planned: Riot Shield trooper (pure blocker, high HP, no damage), Sapper
 - Deeper paths (7+ tiers) with escalating visuals on the soldier sprite
 - Branch choices: at certain tiers pick one of two mutually exclusive upgrades
   (e.g. Recon tier 4: Deadeye crits *or* Shredder pierce)
+- More promotions, one per base class (Assault -> Minigunner, Engineer ->
+  Demolitionist, Recon -> Marksman, Flametrooper -> Napalm Specialist)
 - Tier-gated unlocks per mode (Campaign progression unlocks classes)

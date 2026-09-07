@@ -138,6 +138,8 @@ class Game(
         return RectF(30f + col * 520f, top + row * 225f, 30f + col * 520f + 500f, top + row * 225f + 205f)
     }
 
+    private fun promoteRect() = RectF(60f, towerPanelRect.top + 250f, 1020f, towerPanelRect.top + 400f)
+
     private fun upgradeRowY(i: Int) = towerPanelRect.top + 152f + i * 118f
     private fun upgradeButtonRect(i: Int): RectF {
         val y = upgradeRowY(i)
@@ -293,6 +295,10 @@ class Game(
                     if (other === z || !other.alive) continue
                     if (hypot(other.pos.x - p.x, other.pos.y - p.y) <= p.splash) {
                         other.hp -= p.damage * SPLASH_FALLOFF
+                        // a frost burst chills everything it touches, and at the final
+                        // level freezes them solid too
+                        if (p.slowFactor < 1f) other.applySlow(p.slowFactor, p.slowDuration)
+                        if (p.freeze > 0f && p.freezeBurst) other.applyFreeze(p.freeze)
                     }
                 }
                 effects.add(Effect.splat(p.x, p.y, p.splash * 0.7f))
@@ -380,6 +386,7 @@ class Game(
         }
         z.hp -= p.damage
         if (p.slowFactor < 1f) z.applySlow(p.slowFactor, p.slowDuration)
+        if (p.freeze > 0f) z.applyFreeze(p.freeze)
         if (p.burnDps > 0f) z.applyBurn(p.burnDps, 2f)
         if (p.isCrit) {
             effects.add(Effect.text(z.pos.x, z.pos.y - 60f, "CRIT!", 0xFFFF9100.toInt(), 40f))
@@ -519,9 +526,9 @@ class Game(
             selectedPad = null
             return
         }
-        for (i in TowerType.entries.indices) {
+        for (i in TowerType.buildable.indices) {
             if (buildCardRect(i).contains(x, y)) {
-                val type = TowerType.entries[i]
+                val type = TowerType.buildable[i]
                 if (money >= type.cost) {
                     money -= type.cost
                     val t = Tower(type, pad.c, pad.r)
@@ -549,6 +556,24 @@ class Game(
             selectedTower = null
             return
         }
+        val promotion = tower.type.promotesTo
+        if (tower.isMaxed && promotion != null && promoteRect().contains(x, y)) {
+            if (money < promotion.cost) {
+                effects.add(Effect.text(tower.pos.x, tower.pos.y - 60f, "Need $${promotion.cost}", 0xFFEF5350.toInt()))
+                return
+            }
+            money -= promotion.cost
+            val promoted = Tower(promotion, tower.col, tower.row)
+            // everything sunk into the old class still counts toward the sell value
+            promoted.carryInvestment(tower.invested)
+            if (promotion.isBarracks) promoted.rallyPoint = map.nearestPathPoint(promoted.pos.x, promoted.pos.y)
+            troops.removeAll { it.owner === tower }
+            towers[towers.indexOf(tower)] = promoted
+            selectedTower = promoted
+            effects.add(Effect.text(promoted.pos.x, promoted.pos.y - 60f, promotion.label.uppercase() + "!", 0xFF80DEEA.toInt(), 46f))
+            return
+        }
+
         for (i in tower.type.stats.indices) {
             if (!upgradeButtonRect(i).contains(x, y)) continue
             if (!tower.canBuy(i)) return
@@ -974,6 +999,7 @@ class Game(
         TowerType.ENGINEER -> Figure.Weapon.LAUNCHER
         TowerType.RECON -> Figure.Weapon.SNIPER
         TowerType.FLAME -> Figure.Weapon.FLAMER
+        TowerType.FROST -> Figure.Weapon.FROST
         TowerType.BARRACKS -> Figure.Weapon.NONE
     }
 
@@ -1079,6 +1105,13 @@ class Game(
                 strokePaint.strokeWidth = 4f
                 canvas.drawCircle(z.pos.x, z.pos.y + 28f * scale, 18f * scale, strokePaint)
             }
+            if (z.isFrozen) {
+                strokePaint.color = 0xFFB3E5FC.toInt()
+                strokePaint.strokeWidth = 6f
+                canvas.drawCircle(z.pos.x, z.pos.y + 28f * scale, 21f * scale, strokePaint)
+                fillPaint.color = 0x5580DEEA
+                canvas.drawCircle(z.pos.x, z.pos.y + 28f * scale, 21f * scale, fillPaint)
+            }
             if (z.isBurning) {
                 strokePaint.color = 0xCCFF7043.toInt()
                 strokePaint.strokeWidth = 4f
@@ -1104,6 +1137,7 @@ class Game(
                 TowerType.ENGINEER -> 13f
                 TowerType.SUPPORT -> 6f
                 TowerType.FLAME -> 5f
+                TowerType.FROST -> 10f
                 else -> 8f
             }
             canvas.drawCircle(p.x, p.y, radius, fillPaint)
@@ -1218,8 +1252,8 @@ class Game(
         textPaint.color = 0xFF78909C.toInt()
         canvas.drawText("tap outside to cancel", 1040f, buildPanelRect.top + 58f, textPaint)
 
-        for (i in TowerType.entries.indices) {
-            val type = TowerType.entries[i]
+        for (i in TowerType.buildable.indices) {
+            val type = TowerType.buildable[i]
             val rect = buildCardRect(i)
             val affordable = money >= type.cost
 
@@ -1278,6 +1312,10 @@ class Game(
             if (tower.pierce > 0) append("   PIERCE ${tower.pierce}")
             if (tower.type.baseSlowFactor < 1f) append("   SUPP ${(tower.suppression * 100).roundToInt()}%")
             if (tower.splash > 0f) append("   BLAST ${tower.splash.roundToInt()}")
+            if (tower.type.canFreeze && tower.freezeTime > 0f) {
+                append("   FREEZE %.1fs".format(tower.freezeTime))
+                if (tower.freezesBurst) append(" (burst)")
+            }
             if (tower.type.isFlame) {
                 append("   BURN ${tower.burnDps.roundToInt()}/s for %.1fs".format(tower.burnDuration))
                 if (tower.hasCone) append("   CONE")
@@ -1287,6 +1325,32 @@ class Game(
         canvas.drawText(stats, 40f, towerPanelRect.top + 122f, textPaint)
 
         drawButton(canvas, sellRect, "SELL  $${tower.sellValue}", 0xFF8D6E63.toInt(), 34f)
+
+        val promotion = tower.type.promotesTo
+        if (tower.isMaxed && promotion != null) {
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 32f
+            textPaint.color = 0xFF80DEEA.toInt()
+            canvas.drawText("FULLY UPGRADED — READY TO PROMOTE", VIRTUAL_W / 2f, towerPanelRect.top + 200f, textPaint)
+
+            val rect = promoteRect()
+            val affordable = money >= promotion.cost
+            drawButton(canvas, rect, "PROMOTE TO ${promotion.label.uppercase()}  $${promotion.cost}",
+                if (affordable) 0xFF00838F.toInt() else 0xFF37474F.toInt(), 36f)
+
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 25f
+            textPaint.color = 0xFF90A4AE.toInt()
+            canvas.drawText(
+                "Starts again at level 1 with its own upgrades",
+                VIRTUAL_W / 2f, rect.bottom + 44f, textPaint
+            )
+            canvas.drawText(
+                "${promotion.blurb} • slows hard and freezes from level ${Tower.FREEZE_LEVEL}",
+                VIRTUAL_W / 2f, rect.bottom + 82f, textPaint
+            )
+            return
+        }
 
         for (i in tower.type.stats.indices) {
             val u = tower.type.stats[i]

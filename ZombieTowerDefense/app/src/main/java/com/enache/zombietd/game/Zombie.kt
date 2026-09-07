@@ -46,17 +46,25 @@ class Zombie(val type: ZombieType, private val path: List<PointF>) {
     private var slowFactor = 1f
     private var burnTimer = 0f
     private var burnDps = 0f
+    private var freezeTimer = 0f
 
     var wobble = Random.nextFloat() * 6.28f
         private set
 
     val alive get() = hp > 0f && !reachedEnd
     val isSlowed get() = slowTimer > 0f
+    val isFrozen get() = freezeTimer > 0f
     val isBurning get() = burnTimer > 0f
 
     fun applySlow(factor: Float, duration: Float) {
         slowFactor = if (isSlowed) min(slowFactor, factor) else factor
         slowTimer = max(slowTimer, duration)
+    }
+
+    /** Stops the zombie dead for [duration] seconds. */
+    fun applyFreeze(duration: Float) {
+        freezeTimer = max(freezeTimer, duration)
+        applySlow(0f, duration)
     }
 
     fun applyBurn(dps: Float, duration: Float) {
@@ -66,6 +74,7 @@ class Zombie(val type: ZombieType, private val path: List<PointF>) {
 
     fun update(dt: Float) {
         if (slowTimer > 0f) slowTimer -= dt
+        if (freezeTimer > 0f) freezeTimer -= dt
         if (burnTimer > 0f) {
             burnTimer -= dt
             hp -= burnDps * dt

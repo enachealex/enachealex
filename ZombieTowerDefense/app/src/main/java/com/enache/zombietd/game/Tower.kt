@@ -10,7 +10,7 @@ import kotlin.random.Random
 
 enum class StatKind {
     DAMAGE, RANGE_PCT, RANGE_FLAT, FIRE_RATE, SUPPRESSION, BLAST, ACCURACY,
-    BURN_DPS, BURN_DURATION, BURN_ALT, TROOP_DPS, TROOP_HP, RESPAWN
+    BURN_DPS, BURN_DURATION, BURN_ALT, SLOW_DURATION, TROOP_DPS, TROOP_HP, RESPAWN
 }
 
 /**
@@ -41,6 +41,9 @@ enum class TowerType(
     val baseBurnDps: Float = 0f,      // >0: hits set the target alight
     val baseBurnDuration: Float = 0f,
     val baseSquad: Int = 0,           // >0: barracks squad size
+    val baseFreeze: Float = 0f,       // >0: seconds a hit freezes its target solid
+    /** False for classes that can only be reached by promoting another class. */
+    val buildable: Boolean = true,
     val stats: List<UpgradeStat>
 ) {
     ASSAULT(
@@ -87,6 +90,16 @@ enum class TowerType(
             UpgradeStat("Range", "+15 range", StatKind.RANGE_FLAT, 15f)
         )
     ),
+    FROST(
+        "Frost Trooper", "Freezes", 600, 160, 260f, 18f, 1.6f, 1300f, 0xFF00E5FF.toInt(),
+        baseSlowFactor = 0.55f, slowBaseDuration = 2.5f, baseSplash = 90f,
+        baseFreeze = 0.5f, buildable = false,
+        stats = listOf(
+            UpgradeStat("Freeze Power", "+6% slow strength", StatKind.SUPPRESSION, 0.06f),
+            UpgradeStat("Damage", "+8% damage", StatKind.DAMAGE, 0.08f),
+            UpgradeStat("Chill Duration", "+10% slow duration", StatKind.SLOW_DURATION, 0.10f)
+        )
+    ),
     BARRACKS(
         "Barracks", "Melee squad", 200, 100, 170f, 0f, 0f, 0f, 0xFF8BC34A.toInt(),
         baseSquad = 3,
@@ -101,6 +114,21 @@ enum class TowerType(
     val hasAccuracy get() = baseAccuracy > 0f
     /** Flame classes wash a cone of fire over the trail instead of firing shots. */
     val isFlame get() = baseBurnDps > 0f
+    val canFreeze get() = baseFreeze > 0f
+
+    /** The class this one becomes once it is fully upgraded, if any. */
+    val promotesTo: TowerType? get() = promotionOf(this)
+
+    companion object {
+        val buildable get() = entries.filter { it.buildable }
+
+        // Written as a lookup rather than a constructor argument: an enum constant
+        // cannot reference a sibling constant while it is being constructed.
+        fun promotionOf(type: TowerType): TowerType? = when (type) {
+            SUPPORT -> FROST
+            else -> null
+        }
+    }
 }
 
 class Tower(val type: TowerType, val col: Int, val row: Int) {
@@ -123,6 +151,10 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
         /** From this level a flamer washes everything in a cone, not just one target. */
         const val CONE_LEVEL = 3
         const val CONE_HALF_ANGLE = 0.62f // ~35 degrees either side
+        /** From this level a frost trooper's hits freeze their target solid. */
+        const val FREEZE_LEVEL = 3
+        /** At the final level the freeze catches everything in the burst, not just the target. */
+        const val FREEZE_BURST_LEVEL = MAX_LEVEL
         /** At the final level a flamer leaves burning ground behind. */
         const val NAPALM_LEVEL = MAX_LEVEL
         const val NAPALM_INTERVAL = 2f
@@ -169,6 +201,11 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     /** Total times stat [i] has been purchased across all levels so far. */
     private fun purchases(i: Int) = (level - 1) + if (boughtThisLevel[i]) 1 else 0
 
+    /** Rolls the money sunk into a previous class into this one's sell value. */
+    fun carryInvestment(amount: Int) {
+        invested += amount
+    }
+
     fun buy(i: Int) {
         if (!canBuy(i)) return
         invested += costOf(i)
@@ -197,7 +234,11 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
     /** Suppression strength as a fraction of speed removed, grown by upgrades. */
     val suppression get() = (1f - type.baseSlowFactor) * (1f + total(StatKind.SUPPRESSION))
     val slowFactor get() = if (type.baseSlowFactor < 1f) (1f - suppression).coerceAtLeast(0.25f) else 1f
-    val slowDuration get() = type.slowBaseDuration
+    val slowDuration get() = type.slowBaseDuration * (1f + total(StatKind.SLOW_DURATION))
+
+    /** Seconds a hit stops its target dead; 0 until the freeze milestone. */
+    val freezeTime get() = if (type.canFreeze && level >= FREEZE_LEVEL) type.baseFreeze else 0f
+    val freezesBurst get() = type.canFreeze && level >= FREEZE_BURST_LEVEL
 
     /** Accuracy points; 100 means every shot connects, the excess becomes crit chance. */
     val accuracy get() = type.baseAccuracy * (1f + total(StatKind.ACCURACY))
@@ -319,7 +360,9 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
                 pierceLeft = if (missed) 0 else pierce,
                 slowFactor = if (missed) 1f else slowFactor,
                 slowDuration = slowDuration,
-                splash = if (missed) 0f else splash
+                splash = if (missed) 0f else splash,
+                freeze = if (missed) 0f else freezeTime,
+                freezeBurst = freezesBurst
             )
         )
     }

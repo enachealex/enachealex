@@ -83,7 +83,17 @@ Reaching level 2 and level 4 gives Recon a piercing shot; reaching level 3 and l
 gives the Barracks a fourth soldier (it starts with three). Recon's accuracy is its hit chance — below 100 some
 shots miss, above 100 the surplus becomes critical hits.
 
-Selling a tower refunds 70% of everything invested, upgrades included.
+### Promotions
+
+Fully upgrading a class can unlock a promotion into a stronger one, offered on the
+tower panel where the upgrade rows used to be. A maxed **Support** can be promoted
+into a **Frost Trooper** ($600) — a much harder slow that bursts over an area, and
+that freezes zombies solid from level 3 (everything in the burst from level 5). The
+Frost Trooper cannot be built directly; promotion is the only way to field one.
+Promoting restarts the tower at level 1 with its own three upgrades and keeps
+everything already spent in its sell value.
+
+Selling a tower refunds 70% of everything invested, upgrades and promotions included.
 
 ### Zombies
 
