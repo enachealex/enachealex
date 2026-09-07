@@ -15,13 +15,15 @@ engine and no image assets — everything is rendered with the Android Canvas AP
 ## Gameplay
 
 Pick a mode and a mission or map, then hold the line: the horde marches along the
-dirt trail toward your gate. Build soldiers on open ground to stop them. The map is
+dirt trail toward your gate. Towers can only be built on the prepared emplacements dotted along the
+trail — tap an empty stone pad to choose which class to station there. The map is
 a smooth landscape — trees, rocks and buildings block building — and the game fills
 the whole screen on any aspect ratio. Every person and creature is a jointed stick
 figure: soldiers aim their weapon arm at targets, troops stab, zombies lurch.
 
-- **Call waves early** — as soon as a wave has finished spawning you can call the
-  next one, earning a cash bonus for calling while zombies are still on the field
+- **Waves arrive on their own** — there is no "start wave" button. Wave 1 lands after
+  a short build-up and the rest follow on a timer. Once the last zombie of the current
+  wave has spawned, a SKIP button appears that pulls the next wave in early for a bonus
 - **Deploy troops** ($120) — melee soldiers march from your gate back up the path,
   blocking zombies and fighting hand-to-hand (they carry the charge that damages
   the nest in Castle vs Nest)
@@ -81,9 +83,9 @@ Selling a tower refunds 70% of everything invested, upgrades included.
 ## Controls
 
 - **Pick a mode, then a map** on the home screen
-- **Tap a grass tile** → choose a tower to build
+- **Tap an empty stone pad** → choose which soldier class to station there
 - **Tap a tower** → buy upgrade ranks or sell it (shows its range)
-- **START/CALL WAVE** → send in the next wave (call early for a bonus)
+- **SKIP** → pull the next wave in early (only once the current wave has fully spawned)
 - **TROOP** → deploy a melee soldier
 - **1x/2x** → toggle game speed; pause opens the menu
 

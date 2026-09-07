@@ -21,7 +21,9 @@ class Game(private val progress: Progress = MemoryProgress()) {
         const val START_MONEY = 350
         const val START_LIVES = 20
         const val SPLASH_FALLOFF = 0.6f
-        const val EARLY_CALL_BONUS = 40
+        const val SKIP_BONUS = 40
+        const val PREP_TIME = 25f       // build time before wave 1
+        const val AUTO_WAVE_GAP = 14f   // seconds between automatic waves
         const val NEST_MAX_HP = 4000f
     }
 
@@ -53,6 +55,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
     private var shake = 0f
     private var nestHp = NEST_MAX_HP
     private var clock = 0f
+    private var waveTimer = PREP_TIME
 
     private val zombies = mutableListOf<Zombie>()
     private val towers = mutableListOf<Tower>()
@@ -61,7 +64,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
     private val effects = mutableListOf<Effect>()
     private val waves = WaveManager()
 
-    private var selectedCell: Pair<Int, Int>? = null
+    private var selectedPad: Pad? = null
     private var selectedTower: Tower? = null
     private var terrain: Terrain? = null
 
@@ -75,7 +78,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
     private val backRect = RectF(40f, 40f, 260f, 130f)
 
     private var panelTop = 0f
-    private var startWaveRect = RectF()
+    private var skipWaveRect = RectF()
     private var troopRect = RectF()
     private var buildPanelRect = RectF()
     private var towerPanelRect = RectF()
@@ -103,7 +106,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
     private fun recomputeLayout() {
         val vh = virtualH
         panelTop = vh - 240f
-        startWaveRect = RectF(40f, panelTop + 35f, 540f, panelTop + 185f)
+        skipWaveRect = RectF(40f, panelTop + 35f, 540f, panelTop + 185f)
         troopRect = RectF(580f, panelTop + 35f, 850f, panelTop + 185f)
         buildPanelRect = RectF(10f, vh - 800f, 1070f, vh - 10f)
         towerPanelRect = RectF(10f, vh - 780f, 1070f, vh - 10f)
@@ -171,8 +174,12 @@ class Game(private val progress: Progress = MemoryProgress()) {
         repeat(speed) { step(dt) }
     }
 
-    private fun canManualWave() =
+    /** True while more waves are still due in this run. */
+    private fun wavesRemain() =
         mode != Mode.CASTLE && (mode == Mode.SURVIVAL || endlessMode || waves.wave < targetWaves)
+
+    /** The next wave may be skipped to only once the current one has fully spawned. */
+    private fun canSkipWave() = wavesRemain() && !waves.spawning
 
     private fun step(dt: Float) {
         if (shake > 0f) shake -= dt
@@ -180,6 +187,12 @@ class Game(private val progress: Progress = MemoryProgress()) {
         // the nest never stops spawning
         if (mode == Mode.CASTLE && !waves.spawning && zombies.size < 8) {
             waves.startNextWave()
+        }
+
+        // waves arrive on their own schedule; the player can only skip ahead
+        if (wavesRemain() && !waves.spawning) {
+            waveTimer -= dt
+            if (waveTimer <= 0f) startWave(bonus = false)
         }
 
         waves.update(dt) { type -> zombies.add(Zombie(type, map.paths.random())) }
@@ -310,7 +323,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
                 if (lives <= 0) {
                     lives = 0
                     state = State.GAME_OVER
-                    selectedCell = null
+                    selectedPad = null
                     selectedTower = null
                 }
             }
@@ -318,6 +331,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
 
         if (mode != Mode.CASTLE && waveActive && !waves.spawning && zombies.isEmpty() && state == State.PLAYING) {
             waveActive = false
+            waveTimer = minOf(waveTimer, AUTO_WAVE_GAP)
             val bonus = 60 + waves.wave * 8
             money += bonus
             effects.add(Effect.text(VIRTUAL_W / 2f, 760f, "Wave ${waves.wave} cleared!  +$$bonus", 0xFF81C784.toInt(), 56f))
@@ -325,9 +339,19 @@ class Game(private val progress: Progress = MemoryProgress()) {
         }
     }
 
+    private fun startWave(bonus: Boolean) {
+        if (bonus) {
+            money += SKIP_BONUS
+            effects.add(Effect.text(skipWaveRect.centerX(), panelTop - 20f, "Skipped! +$$SKIP_BONUS", 0xFF81C784.toInt()))
+        }
+        waves.startNextWave()
+        waveActive = true
+        waveTimer = AUTO_WAVE_GAP
+    }
+
     private fun win() {
         state = State.VICTORY
-        selectedCell = null
+        selectedPad = null
         selectedTower = null
         val m = mission
         if (mode == Mode.CAMPAIGN && m != null && progress.unlockedMissions() < m.index + 2) {
@@ -436,9 +460,9 @@ class Game(private val progress: Progress = MemoryProgress()) {
             return
         }
 
-        val cell = selectedCell
-        if (cell != null) {
-            handleBuildPanelTap(x, y, cell)
+        val pad = selectedPad
+        if (pad != null) {
+            handleBuildPanelTap(x, y, pad)
             return
         }
         val tower = selectedTower
@@ -455,14 +479,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
                 }
                 return
             }
-            if (startWaveRect.contains(x, y) && canManualWave() && !waves.spawning) {
-                if (waveActive && zombies.isNotEmpty()) {
-                    money += EARLY_CALL_BONUS
-                    effects.add(Effect.text(startWaveRect.centerX(), panelTop - 20f, "Early call! +$$EARLY_CALL_BONUS", 0xFF81C784.toInt()))
-                }
-                waves.startNextWave()
-                waveActive = true
-            }
+            if (skipWaveRect.contains(x, y) && canSkipWave()) startWave(bonus = true)
             return
         }
         if (y < GameMap.TOP || y > gridBottom) return
@@ -470,17 +487,18 @@ class Game(private val progress: Progress = MemoryProgress()) {
         val c = (x / GameMap.TILE).toInt()
         val r = ((y - GameMap.TOP) / GameMap.TILE).toInt()
         val hit = towers.find { it.col == c && it.row == r }
+        val padHere = map.padAt(c, r)
         when {
             hit != null -> selectedTower = hit
-            map.isBuildable(c, r) -> selectedCell = c to r
+            padHere != null -> selectedPad = padHere
         }
     }
 
     private fun deployedCount() = troops.count { it.alive && it.isDeployed }
 
-    private fun handleBuildPanelTap(x: Float, y: Float, cell: Pair<Int, Int>) {
+    private fun handleBuildPanelTap(x: Float, y: Float, pad: Pad) {
         if (!buildPanelRect.contains(x, y)) {
-            selectedCell = null
+            selectedPad = null
             return
         }
         for (i in TowerType.entries.indices) {
@@ -488,10 +506,10 @@ class Game(private val progress: Progress = MemoryProgress()) {
                 val type = TowerType.entries[i]
                 if (money >= type.cost) {
                     money -= type.cost
-                    val t = Tower(type, cell.first, cell.second)
+                    val t = Tower(type, pad.c, pad.r)
                     if (type.isBarracks) t.rallyPoint = map.nearestPathPoint(t.pos.x, t.pos.y)
                     towers.add(t)
-                    selectedCell = null
+                    selectedPad = null
                 } else {
                     effects.add(Effect.text(VIRTUAL_W / 2f, buildPanelRect.top + 60f, "Need $${type.cost}", 0xFFEF5350.toInt()))
                 }
@@ -537,6 +555,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
         speed = 1
         endlessMode = false
         waveActive = false
+        waveTimer = PREP_TIME
         paused = false
         inSettings = false
         shake = 0f
@@ -547,7 +566,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
         projectiles.clear()
         effects.clear()
         waves.reset()
-        selectedCell = null
+        selectedPad = null
         selectedTower = null
         state = State.PLAYING
     }
@@ -722,6 +741,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
                     key in m.bridgeCells -> 0xFF7A5C3E.toInt()
                     key in m.water -> 0xFF3A6E8F.toInt()
                     key in m.pathCells -> 0xFF8C7457.toInt()
+                    key in m.padCells -> 0xFF8B877D.toInt()
                     key in m.blocked -> 0xFF2F5E2A.toInt()
                     else -> 0xFF4F6E3C.toInt()
                 }
@@ -792,25 +812,8 @@ class Game(private val progress: Progress = MemoryProgress()) {
             }
         }
 
-        val cell = selectedCell
-        if (cell != null) {
-            // show every open build spot while choosing a soldier
-            fillPaint.color = 0x2AFFFFFF
-            for (r in 0 until GameMap.ROWS) for (c in 0 until GameMap.COLS) {
-                if (!map.isBuildable(c, r) || towers.any { it.col == c && it.row == r }) continue
-                val left = c * GameMap.TILE + 10f
-                val top = GameMap.TOP + r * GameMap.TILE + 10f
-                canvas.drawRoundRect(left, top, left + GameMap.TILE - 20f, top + GameMap.TILE - 20f, 14f, 14f, fillPaint)
-            }
-            val (c, r) = cell
-            val left = c * GameMap.TILE + 6f
-            val top = GameMap.TOP + r * GameMap.TILE + 6f
-            fillPaint.color = 0x66FFFFFF
-            canvas.drawRoundRect(left, top, left + GameMap.TILE - 12f, top + GameMap.TILE - 12f, 16f, 16f, fillPaint)
-            strokePaint.color = Color.WHITE
-            strokePaint.strokeWidth = 4f
-            canvas.drawRoundRect(left, top, left + GameMap.TILE - 12f, top + GameMap.TILE - 12f, 16f, 16f, strokePaint)
-        }
+        drawPads(canvas)
+
         val tower = selectedTower
         if (tower != null) {
             fillPaint.color = 0x2264B5F6
@@ -822,6 +825,51 @@ class Game(private val progress: Progress = MemoryProgress()) {
             if (rally != null) {
                 strokePaint.color = 0xAAFFD54F.toInt()
                 canvas.drawCircle(rally.x, rally.y, 30f, strokePaint)
+            }
+        }
+    }
+
+    /**
+     * Vacant emplacements: a stone platform with a hammer marker, pulsing so
+     * open build spots are easy to find. Occupied pads are hidden by the tower.
+     */
+    private fun drawPads(canvas: Canvas) {
+        val pulse = (sin(clock * 2.2f) + 1f) / 2f
+        for (pad in map.pads) {
+            if (towers.any { it.col == pad.c && it.row == pad.r }) continue
+            val x = pad.pos.x
+            val y = pad.pos.y
+            val selected = pad === selectedPad
+
+            fillPaint.color = 0x44000000
+            canvas.drawCircle(x, y + 6f, 38f, fillPaint)
+            fillPaint.color = 0xFF6E6A62.toInt()
+            canvas.drawCircle(x, y, 36f, fillPaint)
+            fillPaint.color = 0xFF8B877D.toInt()
+            canvas.drawCircle(x, y - 2f, 31f, fillPaint)
+            // cobbles around the rim
+            fillPaint.color = 0xFF7A766D.toInt()
+            for (i in 0 until 8) {
+                val a = i * 0.785f + 0.4f
+                canvas.drawCircle(x + cos(a) * 26f, y - 2f + sin(a) * 26f, 6.5f, fillPaint)
+            }
+            // sunken socket
+            fillPaint.color = 0xFF5C594F.toInt()
+            canvas.drawCircle(x, y - 2f, 17f, fillPaint)
+            fillPaint.color = 0xFF6B6759.toInt()
+            canvas.drawCircle(x, y - 4f, 15f, fillPaint)
+
+            // hammer marker
+            fillPaint.color = if (selected) 0xFFFFE082.toInt() else 0xFFCFD8DC.toInt()
+            canvas.drawRoundRect(x - 3f, y - 14f, x + 3f, y + 8f, 2f, 2f, fillPaint)
+            canvas.drawRoundRect(x - 12f, y - 20f, x + 12f, y - 10f, 3f, 3f, fillPaint)
+
+            strokePaint.color = if (selected) Color.WHITE else (0x55FFFFFF + (60 * pulse).toInt().shl(24))
+            strokePaint.strokeWidth = if (selected) 5f else 3f
+            canvas.drawCircle(x, y - 2f, 34f, strokePaint)
+            if (selected) {
+                fillPaint.color = 0x33FFFFFF
+                canvas.drawCircle(x, y - 2f, 34f, fillPaint)
             }
         }
     }
@@ -1038,19 +1086,22 @@ class Game(private val progress: Progress = MemoryProgress()) {
             textPaint.textSize = 26f
             textPaint.color = 0xFF90A4AE.toInt()
             canvas.drawText("Send troops to destroy it!", 40f, panelTop + 150f, textPaint)
-        } else if (canManualWave() && !waves.spawning) {
-            val hot = waveActive && zombies.isNotEmpty()
-            val label = if (hot) "CALL WAVE ${waves.wave + 1}  +$$EARLY_CALL_BONUS"
-            else "START WAVE ${waves.wave + 1}"
-            drawButton(canvas, startWaveRect, label, 0xFF2E7D32.toInt(), 40f)
+        } else if (canSkipWave()) {
+            // the next wave is already on a timer; skipping ahead pays a bonus
+            val secs = kotlin.math.ceil(waveTimer.toDouble()).toInt().coerceAtLeast(0)
+            drawButton(canvas, skipWaveRect, "SKIP TO WAVE ${waves.wave + 1}  +$$SKIP_BONUS", 0xFF2E7D32.toInt(), 34f)
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 24f
+            textPaint.color = 0xFF90A4AE.toInt()
+            canvas.drawText("arrives in ${secs}s", skipWaveRect.centerX(), skipWaveRect.bottom + 34f, textPaint)
         } else {
             textPaint.textAlign = Paint.Align.LEFT
             textPaint.textSize = 38f
             textPaint.color = 0xFFEF9A9A.toInt()
-            canvas.drawText("Wave ${waves.wave}", 40f, panelTop + 90f, textPaint)
+            canvas.drawText("Wave ${waves.wave} incoming", 40f, panelTop + 90f, textPaint)
             textPaint.textSize = 28f
             textPaint.color = 0xFF90A4AE.toInt()
-            canvas.drawText("${waves.queued} incoming • ${zombies.size} on field", 40f, panelTop + 140f, textPaint)
+            canvas.drawText("${waves.queued} still spawning • ${zombies.size} on field", 40f, panelTop + 140f, textPaint)
         }
 
         val deployed = deployedCount()
@@ -1061,8 +1112,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
         textPaint.color = 0xFF90A4AE.toInt()
         canvas.drawText("$deployed/${Troop.MAX_ACTIVE} deployed", troopRect.centerX(), troopRect.bottom + 34f, textPaint)
 
-        val cell = selectedCell
-        if (cell != null) drawBuildPanel(canvas)
+        if (selectedPad != null) drawBuildPanel(canvas)
         val tower = selectedTower
         if (tower != null) drawTowerPanel(canvas, tower)
     }

@@ -3,9 +3,14 @@ package com.enache.zombietd.game
 import android.graphics.PointF
 import kotlin.random.Random
 
-/** A piece of scenery occupying one grid cell. Decorated cells cannot be built on. */
+/** A piece of scenery occupying one grid cell. Scenery cells are never build pads. */
 class Decor(val kind: Kind, val c: Int, val r: Int, val seed: Int) {
     enum class Kind { TREE, PINE, ROCK, HOUSE }
+}
+
+/** A prepared emplacement: the only place a tower may be built. */
+class Pad(val c: Int, val r: Int) {
+    val pos: PointF = GameMap.cellCenter(c, r)
 }
 
 /**
@@ -25,6 +30,7 @@ class GameMap(
         const val TILE = 108f
         const val TOP = 120f // height of the HUD bar above the play field
         const val DECOR_COUNT = 9
+        const val MAX_PADS = 12
 
         fun cellCenter(c: Int, r: Int) = PointF((c + 0.5f) * TILE, TOP + (r + 0.5f) * TILE)
 
@@ -59,13 +65,40 @@ class GameMap(
     val exitCells: Set<Pair<Int, Int>> =
         expandedLanes.mapNotNull { lane -> lane.lastOrNull { (c, r) -> isInside(c, r) } }.toSet()
 
+    /**
+     * Prepared emplacements. Towers can only be built here, so they are placed
+     * deterministically: cells that touch the trail (so they can actually shoot),
+     * never on it, and never adjacent to each other so each pad reads clearly.
+     */
+    val pads: List<Pad> = buildList {
+        val taken = mutableListOf<Pair<Int, Int>>()
+        for (r in 0 until ROWS) for (c in 0 until COLS) {
+            if (size >= MAX_PADS) break
+            val key = c to r
+            if (key in pathCells || key in water) continue
+            // must touch the trail (8-neighbourhood)
+            var touchesTrail = false
+            for (dr in -1..1) for (dc in -1..1) {
+                if (dc == 0 && dr == 0) continue
+                if ((c + dc to r + dr) in pathCells) touchesTrail = true
+            }
+            if (!touchesTrail) continue
+            // keep pads apart so each one is its own decision
+            if (taken.any { (tc, tr) -> maxOf(kotlin.math.abs(tc - c), kotlin.math.abs(tr - r)) < 2 }) continue
+            taken.add(key)
+            add(Pad(c, r))
+        }
+    }
+
+    val padCells: Set<Pair<Int, Int>> = pads.map { it.c to it.r }.toSet()
+
     /** Trees, rocks and buildings scattered deterministically over free ground. */
     val decor: List<Decor> = buildList {
         val rnd = Random(name.hashCode())
         val free = mutableListOf<Pair<Int, Int>>()
         for (r in 0 until ROWS) for (c in 0 until COLS) {
             val key = c to r
-            if (key !in pathCells && key !in water) free.add(key)
+            if (key !in pathCells && key !in water && key !in padCells) free.add(key)
         }
         free.shuffle(rnd)
         val kinds = listOf(
@@ -82,8 +115,8 @@ class GameMap(
 
     fun isInside(c: Int, r: Int) = c in 0 until COLS && r in 0 until ROWS
 
-    fun isBuildable(c: Int, r: Int) =
-        isInside(c, r) && (c to r) !in pathCells && (c to r) !in water && (c to r) !in blocked
+    /** Towers may only stand on a prepared pad. */
+    fun padAt(c: Int, r: Int): Pad? = pads.firstOrNull { it.c == c && it.r == r }
 
     /** Centre of the trail cell nearest to a point (used as a barracks rally point). */
     fun nearestPathPoint(x: Float, y: Float): PointF {

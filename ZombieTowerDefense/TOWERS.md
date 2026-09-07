@@ -39,6 +39,12 @@ pure data (`TowerType` entries), so introducing one is stats + a path + a sprite
 Planned: Riot Shield trooper (pure blocker, high HP, no damage), Sapper
 (runs the path and drops mines), Squad drop (3 troops at once, discounted).
 
+## Back burner
+
+- **Clearing scenery** — let towers/troops shoot down trees and rocks to open up
+  more ground. Parked until the pad layout has been played in; if pads stay fixed,
+  clearing would instead reveal extra pads rather than free-form space.
+
 ## Tier system roadmap
 
 - Deeper paths (7+ tiers) with escalating visuals on the soldier sprite
