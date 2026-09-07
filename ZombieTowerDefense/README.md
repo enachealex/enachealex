@@ -60,14 +60,19 @@ for the full roster of implemented and planned classes.
 
 ### Upgrades
 
-Every class has its own **ordered upgrade path** — five tiers bought in
-sequence, with rising costs. Deeper tier systems are planned.
+Each class has **three upgradeable stats**, and a level is only complete once all
+three have been bought — then the same three are offered again, one level higher and
+more expensive. Five levels per tower.
 
-- **Assault** — Rapid Fire → Hollow Points → Long Barrel → Rapid Fire II → Hollow Points II
-- **Support** — Ammo Belt → Suppressing Fire → AP Rounds → Suppressing Fire II → Ammo Belt II
-- **Engineer** — Big Payload → Frag Radius → Auto Loader → Big Payload II → Frag Radius II
-- **Recon** — Heavy Rounds → Piercing Shot → Heavy Rounds II → Deadeye (2.5x crits) → Piercing Shot II
-- **Barracks** — Recruits → Body Armor → Combat Training → Reinforcements → Veterans
+- **Assault** — Damage +5%, Range +20 (starts at 120), Fire Rate +10%
+- **Support** — Fire Rate +8%, Suppression +5%, Damage +5%
+- **Engineer** — Damage +7%, Blast Radius +2%, Fire Rate +5%
+- **Recon** — Range +20% (starts at 250), Damage +10%, Accuracy +10% (starts at 70/100)
+- **Barracks** — Combat Training +8%, Body Armor +8%, Recruiting +5%
+
+Reaching level 2 and level 4 gives Recon a piercing shot; reaching level 3 and level 5
+gives the Barracks another soldier. Recon's accuracy is its hit chance — below 100 some
+shots miss, above 100 the surplus becomes critical hits.
 
 Selling a tower refunds 70% of everything invested, upgrades included.
 

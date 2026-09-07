@@ -10,6 +10,7 @@ class Projectile(
     val damage: Float,
     val kind: TowerType,
     val isCrit: Boolean = false,
+    val isMiss: Boolean = false,
     var pierceLeft: Int = 0,
     val slowFactor: Float = 1f,
     val slowDuration: Float = 0f,

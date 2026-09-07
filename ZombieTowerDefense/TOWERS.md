@@ -5,15 +5,26 @@ a broad roster where each class has a clear combat identity and an ordered
 upgrade path (with deeper tiers and choice-based branches planned). Classes are
 pure data (`TowerType` entries), so introducing one is stats + a path + a sprite.
 
-## Implemented
+## Upgrade system
 
-| Class    | Cost | Role                | Path (tiers 1→5) |
-|----------|------|---------------------|------------------|
-| Assault  | $100 | All-round DPS       | Rapid Fire → Hollow Points → Long Barrel → Rapid Fire II → Hollow Points II |
-| Support  | $180 | Crowd slow / DPS    | Ammo Belt → Suppressing Fire → AP Rounds → Suppressing Fire II → Ammo Belt II |
-| Engineer | $220 | Splash / area denial| Big Payload → Frag Radius → Auto Loader → Big Payload II → Frag Radius II |
-| Recon    | $250 | Single-target burst | Heavy Rounds → Piercing Shot → Heavy Rounds II → Deadeye → Piercing Shot II |
-| Barracks | $200 | Melee blocker squad | Recruits → Body Armor → Combat Training → Reinforcements → Veterans |
+Every class has exactly **three upgradeable stats**. Each level offers one purchase
+of each; buying all three promotes the tower to the next level, where the same three
+stats are offered again at a higher price (`upgrade cost x level`). Five levels.
+
+| Class    | Cost | Upg. base | Stat 1 | Stat 2 | Stat 3 |
+|----------|------|-----------|--------|--------|--------|
+| Assault  | $100 | $60  | Damage +5% | Range +20 (from 120) | Fire Rate +10% |
+| Support  | $180 | $90  | Fire Rate +8% | Suppression +5% | Damage +5% |
+| Engineer | $220 | $110 | Damage +7% | Blast Radius +2% | Fire Rate +5% |
+| Recon    | $250 | $120 | Range +20% (from 250) | Damage +10% | Accuracy +10% (from 70) |
+| Barracks | $200 | $100 | Combat Training +8% | Body Armor +8% | Recruiting +5% |
+
+Level milestones: **Recon** gains +1 piercing shot on reaching level 2 and level 4.
+**Barracks** gains another soldier on reaching level 3 and level 5.
+
+**Accuracy** (Recon only) is hit chance out of 100: at 70 roughly three shots in ten
+miss outright (a MISS pops up). Once accuracy passes 100 every shot connects and the
+excess becomes critical-hit chance at 2.5x damage.
 
 ## Planned
 

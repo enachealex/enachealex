@@ -76,12 +76,10 @@ class GameMap(
             if (size >= MAX_PADS) break
             val key = c to r
             if (key in pathCells || key in water) continue
-            // must touch the trail (8-neighbourhood)
-            var touchesTrail = false
-            for (dr in -1..1) for (dc in -1..1) {
-                if (dc == 0 && dr == 0) continue
-                if ((c + dc to r + dr) in pathCells) touchesTrail = true
-            }
+            // must sit directly alongside the trail (edge-adjacent, not diagonal) so
+            // even the shortest-ranged class can cover the road from any pad
+            val touchesTrail = (c - 1 to r) in pathCells || (c + 1 to r) in pathCells ||
+                (c to r - 1) in pathCells || (c to r + 1) in pathCells
             if (!touchesTrail) continue
             // keep pads apart so each one is its own decision
             if (taken.any { (tc, tr) -> maxOf(kotlin.math.abs(tc - c), kotlin.math.abs(tr - r)) < 2 }) continue

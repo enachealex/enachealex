@@ -360,6 +360,10 @@ class Game(private val progress: Progress = MemoryProgress()) {
     }
 
     private fun applyHit(z: Zombie, p: Projectile) {
+        if (p.isMiss) {
+            effects.add(Effect.text(z.pos.x, z.pos.y - 55f, "MISS", 0xFFB0BEC5.toInt(), 34f))
+            return
+        }
         z.hp -= p.damage
         if (p.slowFactor < 1f) z.applySlow(p.slowFactor, p.slowDuration)
         if (p.burnDps > 0f) z.applyBurn(p.burnDps, 2f)
@@ -531,13 +535,17 @@ class Game(private val progress: Progress = MemoryProgress()) {
             selectedTower = null
             return
         }
-        val next = tower.nextTier
-        if (next != null && upgradeButtonRect(tower.tier).contains(x, y)) {
-            if (money >= next.cost) {
-                money -= next.cost
-                tower.buyTier()
-                effects.add(Effect.text(tower.pos.x, tower.pos.y - 50f, next.name, 0xFF81C784.toInt()))
-            }
+        for (i in tower.type.stats.indices) {
+            if (!upgradeButtonRect(i).contains(x, y)) continue
+            if (!tower.canBuy(i)) return
+            val cost = tower.costOf(i)
+            if (money < cost) return
+            val wasLevel = tower.level
+            money -= cost
+            tower.buy(i)
+            val label = if (tower.level > wasLevel) "LEVEL ${tower.displayLevel}!" else tower.type.stats[i].name
+            effects.add(Effect.text(tower.pos.x, tower.pos.y - 50f, label, 0xFF81C784.toInt()))
+            return
         }
     }
 
@@ -937,7 +945,7 @@ class Game(private val progress: Progress = MemoryProgress()) {
             else drawSoldier(canvas, t.pos.x, t.pos.y, t.type, t.angle, 1f)
 
             fillPaint.color = 0xFFFFD54F.toInt()
-            for (i in 0 until min(t.tier, t.type.path.size)) {
+            for (i in 0 until min(t.displayLevel - 1 + (if (t.isMaxed) 1 else 0), Tower.MAX_LEVEL)) {
                 canvas.drawCircle(t.pos.x - 26f + i * 13f, t.pos.y + 46f, 4.5f, fillPaint)
             }
         }
@@ -1175,6 +1183,11 @@ class Game(private val progress: Progress = MemoryProgress()) {
         textPaint.textSize = 42f
         textPaint.color = Color.WHITE
         canvas.drawText(tower.type.label, 40f, towerPanelRect.top + 78f, textPaint)
+        textPaint.textSize = 34f
+        textPaint.color = 0xFFFFD54F.toInt()
+        val levelLabel = if (tower.isMaxed) "LEVEL ${Tower.MAX_LEVEL} — MAX"
+        else "LEVEL ${tower.displayLevel}   (${tower.boughtCount}/${tower.type.stats.size} to level up)"
+        canvas.drawText(levelLabel, 300f, towerPanelRect.top + 78f, textPaint)
         textPaint.textSize = 26f
         textPaint.color = 0xFF90A4AE.toInt()
         val stats = if (tower.type.isBarracks) {
@@ -1182,60 +1195,68 @@ class Game(private val progress: Progress = MemoryProgress()) {
         } else buildString {
             append("DMG ${tower.damage.roundToInt()}   RNG ${tower.range.roundToInt()}   ")
             append("ROF %.1f/s".format(tower.fireRate))
+            if (tower.type.hasAccuracy) append("   ACC ${tower.accuracy.roundToInt()}")
             if (tower.critChance > 0f) append("   CRIT ${(tower.critChance * 100).roundToInt()}%")
             if (tower.pierce > 0) append("   PIERCE ${tower.pierce}")
-            if (tower.type.baseSlowFactor < 1f) append("   SLOW ${((1f - tower.slowFactor) * 100).roundToInt()}%")
+            if (tower.type.baseSlowFactor < 1f) append("   SUPP ${(tower.suppression * 100).roundToInt()}%")
             if (tower.splash > 0f) append("   BLAST ${tower.splash.roundToInt()}")
         }
         canvas.drawText(stats, 40f, towerPanelRect.top + 122f, textPaint)
 
         drawButton(canvas, sellRect, "SELL  $${tower.sellValue}", 0xFF8D6E63.toInt(), 34f)
 
-        for (i in tower.type.path.indices) {
-            val u = tower.type.path[i]
+        for (i in tower.type.stats.indices) {
+            val u = tower.type.stats[i]
             val y = upgradeRowY(i)
-            val bought = i < tower.tier
-            val isNext = i == tower.tier
+            val bought = tower.isBought(i)
+            val buyable = tower.canBuy(i)
 
-            if (bought) fillPaint.color = 0xFFFFD54F.toInt()
-            else if (isNext) fillPaint.color = 0xFF546E7A.toInt()
-            else fillPaint.color = 0xFF2C383E.toInt()
+            // pips: one per level already invested in this stat, plus this level's
+            fillPaint.color = if (bought) 0xFFFFD54F.toInt() else 0xFF546E7A.toInt()
             canvas.drawCircle(58f, y + 56f, 22f, fillPaint)
             textPaint.textAlign = Paint.Align.CENTER
             textPaint.textSize = 26f
             textPaint.color = if (bought) 0xFF3E2E00.toInt() else Color.WHITE
-            canvas.drawText("${i + 1}", 58f, y + 65f, textPaint)
+            canvas.drawText("${tower.displayLevel}", 58f, y + 65f, textPaint)
 
             textPaint.textAlign = Paint.Align.LEFT
             textPaint.textSize = 32f
-            textPaint.color = when {
-                bought -> 0xFFFFD54F.toInt()
-                isNext -> Color.WHITE
-                else -> 0xFF607D8B.toInt()
-            }
+            textPaint.color = if (bought) 0xFFFFD54F.toInt() else Color.WHITE
             canvas.drawText(u.name, 100f, y + 46f, textPaint)
             textPaint.textSize = 24f
-            textPaint.color = if (i <= tower.tier) 0xFF90A4AE.toInt() else 0xFF546E7A.toInt()
+            textPaint.color = 0xFF90A4AE.toInt()
             canvas.drawText(u.desc, 100f, y + 82f, textPaint)
 
             when {
+                tower.isMaxed -> {
+                    textPaint.textAlign = Paint.Align.RIGHT
+                    textPaint.textSize = 30f
+                    textPaint.color = 0xFF546E7A.toInt()
+                    canvas.drawText("MAX", 1030f, y + 68f, textPaint)
+                }
                 bought -> {
                     textPaint.textAlign = Paint.Align.RIGHT
-                    textPaint.textSize = 32f
+                    textPaint.textSize = 30f
                     textPaint.color = 0xFF81C784.toInt()
-                    canvas.drawText("OWNED", 1030f, y + 68f, textPaint)
-                }
-                isNext -> {
-                    val affordable = money >= u.cost
-                    drawButton(canvas, upgradeButtonRect(i), "$${u.cost}", if (affordable) 0xFF2E7D32.toInt() else 0xFF37474F.toInt(), 34f)
+                    canvas.drawText("BOUGHT ✓", 1030f, y + 68f, textPaint)
                 }
                 else -> {
-                    textPaint.textAlign = Paint.Align.RIGHT
-                    textPaint.textSize = 28f
-                    textPaint.color = 0xFF546E7A.toInt()
-                    canvas.drawText("LOCKED", 1030f, y + 66f, textPaint)
+                    val cost = tower.costOf(i)
+                    val affordable = money >= cost
+                    drawButton(canvas, upgradeButtonRect(i), "$$cost", if (affordable) 0xFF2E7D32.toInt() else 0xFF37474F.toInt(), 34f)
                 }
             }
+        }
+
+        if (!tower.isMaxed) {
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 25f
+            textPaint.color = 0xFF78909C.toInt()
+            val left = tower.type.stats.size - tower.boughtCount
+            canvas.drawText(
+                "Buy all three to reach Level ${tower.displayLevel + 1}  ($left left)",
+                VIRTUAL_W / 2f, upgradeRowY(tower.type.stats.size) + 40f, textPaint
+            )
         }
     }
 
