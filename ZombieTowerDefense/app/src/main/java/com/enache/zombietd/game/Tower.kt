@@ -93,6 +93,11 @@ enum class TowerType(
 class Tower(val type: TowerType, val col: Int, val row: Int) {
     companion object {
         const val MAX_LEVEL = 5
+        /**
+         * Global multiplier on every range value. Class stats below are written in
+         * design units (Assault 120, Recon 250); this scales them to the board.
+         */
+        const val RANGE_SCALE = 1.5f
         const val CRIT_MULTIPLIER = 2.5f
         const val SQUAD_BASE_HP = 180f
         const val SQUAD_BASE_DPS = 35f
@@ -157,7 +162,8 @@ class Tower(val type: TowerType, val col: Int, val row: Int) {
 
     val damage get() = type.baseDamage * (1f + total(StatKind.DAMAGE))
     val fireRate get() = type.baseFireRate * (1f + total(StatKind.FIRE_RATE))
-    val range get() = type.baseRange * (1f + total(StatKind.RANGE_PCT)) + total(StatKind.RANGE_FLAT)
+    val range get() =
+        (type.baseRange * (1f + total(StatKind.RANGE_PCT)) + total(StatKind.RANGE_FLAT)) * RANGE_SCALE
     val splash get() = if (type.baseSplash > 0f) type.baseSplash * (1f + total(StatKind.BLAST)) else 0f
 
     /** Suppression strength as a fraction of speed removed, grown by upgrades. */

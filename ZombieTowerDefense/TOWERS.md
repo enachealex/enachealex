@@ -19,6 +19,9 @@ stats are offered again at a higher price (`upgrade cost x level`). Five levels.
 | Recon    | $250 | $120 | Range +20% (from 250) | Damage +10% | Accuracy +10% (from 70) |
 | Barracks | $200 | $100 | Combat Training +8% | Body Armor +8% | Recruiting +5% |
 
+All range figures are design units; the board applies a global `RANGE_SCALE` of
+1.5x, so Assault opens at 180px (about 1.7 tiles) and a maxed Recon reaches 750px.
+
 Level milestones: **Recon** gains +1 piercing shot on reaching level 2 and level 4.
 **Barracks** gains another soldier on reaching level 3 and level 5.
 
