@@ -835,3 +835,28 @@ photos frequently show aftermarket wheels, which breaks scale calibration unless
   "log in and it's all there." Local-only privacy is a genuine differentiator, so
   this is likely the right trade — but it should be a chosen trade, and it makes
   fixing native backup import (Phase 6) non-optional.
+
+## Post-Phase-7 UI-polish round (shipped)
+
+A round of live user feedback on the running app, applied on top of Phase 7:
+
+- **Home hub**: tapping a vehicle now asks *Maintenance or Tires* in a modal,
+  and the chosen feature's tab highlights; compact ＋Add and backup buttons.
+- **Tires rename**: the Wheels feature is user-facing as **Tires** (tab,
+  headers, copy). Internal keys stay `wheels`.
+- **Drum size pickers**: width/sidewall/wheel select via vertical
+  timer-style drums — touch drag, tap, mouse click-drag, and wheel input
+  paced one row per notch with an eased snap.
+- **Factory size as baseline**: a curated OEM fitment table pre-fills the
+  placard size per vehicle (editable; the door-jamb sticker stays the
+  authority), and the comparison card is baselined against factory.
+- **Wheel auto-detect**: the calibration photo is scanned for the wheel
+  (ring-contrast search + least-squares edge fit, ~0.5% scale error on the
+  demo photo); manual taps always override.
+- **Dashboard cleanup**: reminder frequency collapses to a summary card,
+  oil type lives inside the Engine oil & filter row, notice line removed.
+
+Note: this round was first built in an ephemeral cloud container and its
+commit was lost to a container recycle before being pushed; it was rebuilt
+and verified from the reviewed sources, and the branch now pushes
+immediately after every verified round.
