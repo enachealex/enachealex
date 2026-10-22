@@ -860,3 +860,14 @@ Note: this round was first built in an ephemeral cloud container and its
 commit was lost to a container recycle before being pushed; it was rebuilt
 and verified from the reviewed sources, and the branch now pushes
 immediately after every verified round.
+
+## Dependency currency (post-polish round)
+
+- All in-range SDK 57 updates applied, then the app moved to **Expo SDK 58**
+  (react-native 0.88, react 19.3, jest 30, typescript 7). The only code the
+  jump required: react-native 0.88 types component refs via
+  `React.ComponentRef`, touched in three files.
+- `async-storage` stays at 2.2.0 — SDK 58's own pin. The Dependabot 3.1.1
+  branch is off-matrix and should be declined.
+- The open Dependabot PRs target `main`, which is an ancestor of this
+  branch; merging this branch supersedes them all.
